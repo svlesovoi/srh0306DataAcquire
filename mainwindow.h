@@ -4,6 +4,9 @@
 #include <QMainWindow>
 #include <QMessageBox>
 #include <QtNetwork>
+#include <QString>
+#include <valarray>
+#include <complex>
 
 namespace Ui {
 class MainWindow;
@@ -35,8 +38,21 @@ private:
     QString correlatorIP;
     int correlatorPort;
     int packetNumber;
+    int fullPacketNumber;
+    int fitsDataOffset;
     unsigned long packetSize;
     unsigned char* pDataPacket;
+
+    int frequencyListSize;
+    int fullPacketsInFits;
+    int numberOfVisibilities;
+
+    std::vector<float> freqColumn;
+    std::vector<std::valarray<double> > timeColumn;
+    std::vector<std::valarray<std::complex<float> > > rcpVisColumn;
+    std::vector<std::valarray<std::complex<float> > > lcpVisColumn;
+
+    void writeCurrentFits();
 };
 
 #endif // MAINWINDOW_H

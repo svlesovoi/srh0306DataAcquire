@@ -8,6 +8,8 @@ QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets printsupport
 
+#QMAKE_CFLAGS += -std=c++11
+
 TARGET = srh36ControlTest
 TEMPLATE = app
 

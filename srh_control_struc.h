@@ -57,7 +57,8 @@ typedef struct sPkg_Head {
             uint32_t isRqstR:1;
             uint32_t isPacked:1;
             uint32_t isCrypt:1;
-            uint32_t Rsrvd:1;
+            uint32_t polarization:1;
+            uint32_t frequencyIndex:8;
         };
     };
 } tPkg_Head;
