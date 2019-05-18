@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "srh_control_struc.h"
+#include "correlator.h"
 
 #include <CCfits>
 using namespace CCfits;
@@ -17,21 +17,25 @@ MainWindow::MainWindow(QWidget *parent) :
 
     packetNumber = 0;
     packetSize = 0;
-    pDataPacket = NULL;
-    fitsDataOffset = 0;
+    lcpDataPacket = NULL;
+    rcpDataPacket = NULL;
+    lcpFitsDataOffset = 0;
+    rcpFitsDataOffset = 0;
     QSettings settings;
     correlatorIP = settings.value("network/correlatorIP", "10.0.5.179").toString();
     correlatorPort = settings.value("network/correlatorPort", 56565).toInt();
     fullPacketsInFits = settings.value("FITS/fullPacketsInFits", 256).toInt();
     frequencyListSize = settings.value("FITS/frequencyListSize", 32).toInt();
     numberOfVisibilities = 512;
-    fullPacketNumber = 0;
-    pDataPacket = new unsigned char[dHlgrph_PkgMaxSz * fullPacketsInFits * 2 * 4];
+    lcpFullPacketNumber = 0;
+    rcpFullPacketNumber = 0;
+    lcpDataPacket = new unsigned char[dHlgrph_PkgMaxSz * fullPacketsInFits * 2 * 4];
+    rcpDataPacket = new unsigned char[dHlgrph_PkgMaxSz * fullPacketsInFits * 2 * 4];
 
     freqColumn.resize(frequencyListSize);
     std::valarray<double> dArr(fullPacketsInFits / frequencyListSize);
-    timeColumn.assign(frequencyListSize, dArr);
     std::valarray<complex<float> > cfArr(fullPacketsInFits / frequencyListSize * numberOfVisibilities);
+    timeColumn.assign(frequencyListSize, dArr);
     rcpVisColumn.assign(frequencyListSize, cfArr);
     lcpVisColumn.assign(frequencyListSize, cfArr);
 
@@ -151,37 +155,52 @@ void MainWindow::on_correlatorClient_read(){
             break;
         case eRqst_Rdr_Strm_DtOut:
             QTime curTime = QTime::currentTime();
+            complex<float>* pLcpVisibility = reinterpret_cast< complex<float>* >(lcpDataPacket);
+            complex<float>* pRcpVisibility = reinterpret_cast< complex<float>* >(rcpDataPacket);
+            char* pLcpTempor = reinterpret_cast< char* >(lcpDataPacket);
+            int lcpVisColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfVisibilities;
+            int rcpVisColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfVisibilities;
             if (correlatorPacket.H.isPacked){
-                fitsDataOffset = correlatorPacket.D.Blck.DtBlck.FullDtSz * fullPacketNumber;
-                msg.sprintf("packet %d, packetInFits %d, f %d, t %f", fullPacketNumber, fullPacketsInFits, correlatorPacket.H.frequencyIndex, curTime.msecsSinceStartOfDay() * 0.001);
+                if (correlatorPacket.D.Blck.Cfg.Polarization == 0){
+                    lcpFitsDataOffset = correlatorPacket.D.Blck.DtBlck.FullDtSz * lcpFullPacketNumber;
+                    std::memcpy(lcpDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + lcpFitsDataOffset, correlatorPacket.D.Blck.pU8, correlatorPacket.D.Blck.DtBlck.DtSz);
+                } else {
+                    rcpFitsDataOffset = correlatorPacket.D.Blck.DtBlck.FullDtSz * rcpFullPacketNumber;
+                    std::memcpy(rcpDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + rcpFitsDataOffset, correlatorPacket.D.pU8, correlatorPacket.D.Blck.DtBlck.DtSz);
+                }
+                msg.sprintf("P %d, f %d, data %d", correlatorPacket.D.Blck.Cfg.Polarization, correlatorPacket.D.Blck.Cfg.Frequency, pLcpTempor[0]);
                 ui->logText->append(msg);
-                std::memcpy(pDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + fitsDataOffset, correlatorPacket.D.pU8, correlatorPacket.D.Blck.DtBlck.DtSz);
-//                for (uint32_t i = 0;i < correlatorPacket.D.Blck.DtBlck.DtSz;++i)
-//                    pDataPacket[i + correlatorPacket.D.Blck.DtBlck.Offset + fitsDataOffset] = correlatorPacket.D.pU8[i];
                 if (correlatorPacket.D.Blck.DtBlck.Offset == 0){
-                    ui->logText->append("First data packet");
+                    ui->logText->append("First sub-packet");
                 } else if (correlatorPacket.D.Blck.DtBlck.Offset + correlatorPacket.D.Blck.DtBlck.DtSz == correlatorPacket.D.Blck.DtBlck.FullDtSz){
-                    ui->logText->append("Last data packet");
-                    if (correlatorPacket.H.frequencyIndex < frequencyListSize){
-                        timeColumn[correlatorPacket.H.frequencyIndex][fullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
-                        if (correlatorPacket.H.polarization == 0) for (int j = 0;j < numberOfVisibilities;++j)
-                            lcpVisColumn[correlatorPacket.H.frequencyIndex][fullPacketNumber / frequencyListSize * numberOfVisibilities + j] = complex<float>(*(reinterpret_cast<uint32_t*>(pDataPacket) + j), 0.);
-                        else for (int j = 0;j < numberOfVisibilities;++j)
-                            rcpVisColumn[correlatorPacket.H.frequencyIndex][fullPacketNumber / frequencyListSize * numberOfVisibilities + j] = complex<float>(*(reinterpret_cast<uint32_t*>(pDataPacket) + j), 0.);
+                    ui->logText->append("Last sub-packet");
+                    if (correlatorPacket.D.Blck.Cfg.Frequency < frequencyListSize){
+                        if (correlatorPacket.D.Blck.Cfg.Polarization == 0){
+                            timeColumn[correlatorPacket.D.Blck.Cfg.Frequency][lcpFullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
+                            for (int j = 0;j < numberOfVisibilities;++j)
+                                lcpVisColumn[correlatorPacket.D.Blck.Cfg.Frequency][lcpVisColumnOffset + j] = pLcpVisibility[j];
+                            ++lcpFullPacketNumber;
+                        } else {
+                            for (int j = 0;j < numberOfVisibilities;++j)
+                                rcpVisColumn[correlatorPacket.D.Blck.Cfg.Frequency][rcpVisColumnOffset + j] = pRcpVisibility[j];
+                            ++rcpFullPacketNumber;
+                        }
                     }
-                    if (++fullPacketNumber >= fullPacketsInFits){
+                    if (lcpFullPacketNumber == fullPacketsInFits && rcpFullPacketNumber == fullPacketsInFits){
                         writeCurrentFits();
-                        fullPacketNumber = 0;
+                        lcpFullPacketNumber = 0;
+                        rcpFullPacketNumber = 0;
                     }
                 } else {
-                    ui->logText->append("Data packet");
+                    msg.sprintf("offset %d", correlatorPacket.D.Blck.DtBlck.Offset);
+                    ui->logText->append(msg);
                 }
-                ui->plotter->graph(0)->addData(packetNumber, *(reinterpret_cast<uint32_t*>(pDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + fitsDataOffset)));
+//                ui->plotter->graph(0)->addData(packetNumber, *(reinterpret_cast<uint32_t*>(pDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + fitsDataOffset)));
             }
             break;
         }
         ++packetNumber;
-        ui->plotter->graph(1)->addData(packetNumber, fullPacketNumber*100);
+        ui->plotter->graph(1)->addData(packetNumber, lcpFullPacketNumber*100);
         ui->plotter->xAxis->setRange(0, packetNumber + 20);
         ui->plotter->replot();
     }
@@ -209,7 +228,7 @@ void MainWindow::on_requestDataButton_clicked(){
 void MainWindow::writeCurrentFits(){
     unsigned long rows(frequencyListSize);
     string hduSign("SRH_DATA");
-    QString qFitsName = "srh_" + QDateTime::currentDateTime().toString() + ".fit";
+    QString qFitsName = "srh_" + QDateTime::currentDateTime().toString("yyyyMMddThhmm") + ".fit";
     const std::string fitsName = qFitsName.toStdString();
     std::vector<string> colName(4,"");
     std::vector<string> colForm(4,"");
@@ -222,18 +241,14 @@ void MainWindow::writeCurrentFits(){
     colName[3] = "rcpVis";
 
     colForm[0] = "1J";
-    columnFormat.sprintf("%dD", fullPacketsInFits / frequencyListSize); colForm[1] = columnFormat.toStdString();
-    columnFormat.sprintf("%dC", fullPacketsInFits / frequencyListSize * numberOfVisibilities); colForm[2] = columnFormat.toStdString();
-    columnFormat.sprintf("%dC", fullPacketsInFits / frequencyListSize * numberOfVisibilities); colForm[3] = columnFormat.toStdString();
+    columnFormat.sprintf("%dD", fullPacketsInFits / frequencyListSize);                         colForm[1] = columnFormat.toStdString();
+    columnFormat.sprintf("%dC", fullPacketsInFits / frequencyListSize * numberOfVisibilities);  colForm[2] = columnFormat.toStdString();
+    columnFormat.sprintf("%dC", fullPacketsInFits / frequencyListSize * numberOfVisibilities);  colForm[3] = columnFormat.toStdString();
 
     colUnit[0] = "Hz";
     colUnit[1] = "second";
     colUnit[2] = "correlation";
     colUnit[3] = "correlation";
-
-    std::vector<float> freqs(rows);
-    for (int i = 0;i < (int)rows;++i)
-        freqs[i] = 4000. + i*500.;
 
     try{
         FITS fitsTable(fitsName, Write);
@@ -242,7 +257,6 @@ void MainWindow::writeCurrentFits(){
         pTable->column(colName[1]).writeArrays(timeColumn, 1);
         pTable->column(colName[2]).writeArrays(lcpVisColumn, 1);
         pTable->column(colName[3]).writeArrays(rcpVisColumn, 1);
-
     }
 
     catch (FITS::CantCreate){

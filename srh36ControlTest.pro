@@ -19,8 +19,7 @@ SOURCES += main.cpp\
     qcustomplot.cpp
 
 HEADERS  += mainwindow.h \
-    qcustomplot.h \
-    srh_control_struc.h
+    qcustomplot.h
 
 FORMS    += mainwindow.ui
 

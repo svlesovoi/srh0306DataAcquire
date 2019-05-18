@@ -38,10 +38,13 @@ private:
     QString correlatorIP;
     int correlatorPort;
     int packetNumber;
-    int fullPacketNumber;
-    int fitsDataOffset;
+    int lcpFullPacketNumber;
+    int rcpFullPacketNumber;
+    int lcpFitsDataOffset;
+    int rcpFitsDataOffset;
     unsigned long packetSize;
-    unsigned char* pDataPacket;
+    unsigned char* lcpDataPacket;
+    unsigned char* rcpDataPacket;
 
     int frequencyListSize;
     int fullPacketsInFits;
