@@ -49,6 +49,10 @@ private:
     int frequencyListSize;
     int fullPacketsInFits;
     int numberOfVisibilities;
+    int currentFrequency;
+    int currentPolarization;
+    int showFrequency;
+    int showVisibility;
 
     std::vector<float> freqColumn;
     std::vector<std::valarray<double> > timeColumn;
@@ -56,6 +60,11 @@ private:
     std::vector<std::valarray<std::complex<float> > > lcpVisColumn;
 
     void writeCurrentFits();
+};
+
+struct SCorrVis{
+    int32_t real;
+    int32_t imag;
 };
 
 #endif // MAINWINDOW_H

@@ -27,6 +27,10 @@ MainWindow::MainWindow(QWidget *parent) :
     fullPacketsInFits = settings.value("FITS/fullPacketsInFits", 256).toInt();
     frequencyListSize = settings.value("FITS/frequencyListSize", 32).toInt();
     numberOfVisibilities = 512;
+    currentFrequency = 0;
+    currentPolarization = 0;
+    showFrequency = 0;
+    showVisibility = 0;
     lcpFullPacketNumber = 0;
     rcpFullPacketNumber = 0;
     lcpDataPacket = new unsigned char[dHlgrph_PkgMaxSz * fullPacketsInFits * 2 * 4];
@@ -41,9 +45,10 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->setupUi(this);
     ui->plotter->addGraph();
-    ui->plotter->addGraph();    ui->plotter->addGraph();
+    ui->plotter->addGraph();
+    ui->plotter->addGraph();
     ui->plotter->xAxis->setLabel("packet number");
-    ui->plotter->yAxis->setLabel("data packet offset");
+    ui->plotter->yAxis->setLabel("visibility");
     ui->plotter->xAxis->setRange(0, 20);
     ui->plotter->yAxis->setRange(0, 10000);
     ui->plotter->graph(0)->setPen(QPen(QColor(255,0,0),1));
@@ -140,6 +145,8 @@ void MainWindow::on_correlatorClient_read(){
     QString msg;
     packetSize = pCorrelatorClient->bytesAvailable();
     tPkg correlatorPacket;
+    int lcpVisColumnOffset;
+    int rcpVisColumnOffset;
     if (packetSize >= sizeof(tPkg)){
         pCorrelatorClient->read(reinterpret_cast<char*>(&correlatorPacket), sizeof(tPkg));
         switch (correlatorPacket.H.Rqst){
@@ -155,34 +162,33 @@ void MainWindow::on_correlatorClient_read(){
             break;
         case eRqst_Rdr_Strm_DtOut:
             QTime curTime = QTime::currentTime();
-            complex<float>* pLcpVisibility = reinterpret_cast< complex<float>* >(lcpDataPacket);
-            complex<float>* pRcpVisibility = reinterpret_cast< complex<float>* >(rcpDataPacket);
-            char* pLcpTempor = reinterpret_cast< char* >(lcpDataPacket);
-            int lcpVisColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfVisibilities;
-            int rcpVisColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfVisibilities;
+//            complex<float>* pLcpVisibility = reinterpret_cast< complex<float>* >(lcpDataPacket);
+//            complex<float>* pRcpVisibility = reinterpret_cast< complex<float>* >(rcpDataPacket);
+            struct SCorrVis* pLcpVisibility = reinterpret_cast< struct SCorrVis* >(lcpDataPacket);
+            struct SCorrVis* pRcpVisibility = reinterpret_cast< struct SCorrVis* >(rcpDataPacket);
+            lcpVisColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfVisibilities;
+            rcpVisColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfVisibilities;
             if (correlatorPacket.H.isPacked){
-                if (correlatorPacket.D.Blck.Cfg.Polarization == 0){
+                if (currentPolarization == 0){
                     lcpFitsDataOffset = correlatorPacket.D.Blck.DtBlck.FullDtSz * lcpFullPacketNumber;
                     std::memcpy(lcpDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + lcpFitsDataOffset, correlatorPacket.D.Blck.pU8, correlatorPacket.D.Blck.DtBlck.DtSz);
                 } else {
                     rcpFitsDataOffset = correlatorPacket.D.Blck.DtBlck.FullDtSz * rcpFullPacketNumber;
-                    std::memcpy(rcpDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + rcpFitsDataOffset, correlatorPacket.D.pU8, correlatorPacket.D.Blck.DtBlck.DtSz);
+                    std::memcpy(rcpDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + rcpFitsDataOffset, correlatorPacket.D.Blck.pU8, correlatorPacket.D.Blck.DtBlck.DtSz);
                 }
-                msg.sprintf("P %d, f %d, data %d", correlatorPacket.D.Blck.Cfg.Polarization, correlatorPacket.D.Blck.Cfg.Frequency, pLcpTempor[0]);
-                ui->logText->append(msg);
                 if (correlatorPacket.D.Blck.DtBlck.Offset == 0){
                     ui->logText->append("First sub-packet");
                 } else if (correlatorPacket.D.Blck.DtBlck.Offset + correlatorPacket.D.Blck.DtBlck.DtSz == correlatorPacket.D.Blck.DtBlck.FullDtSz){
                     ui->logText->append("Last sub-packet");
-                    if (correlatorPacket.D.Blck.Cfg.Frequency < frequencyListSize){
-                        if (correlatorPacket.D.Blck.Cfg.Polarization == 0){
-                            timeColumn[correlatorPacket.D.Blck.Cfg.Frequency][lcpFullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
+                    if (currentFrequency < frequencyListSize){
+                        if (currentPolarization == 0){
+                            timeColumn[currentFrequency][lcpFullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
                             for (int j = 0;j < numberOfVisibilities;++j)
-                                lcpVisColumn[correlatorPacket.D.Blck.Cfg.Frequency][lcpVisColumnOffset + j] = pLcpVisibility[j];
+                                lcpVisColumn[currentFrequency][lcpVisColumnOffset + j] = complex<float>(pLcpVisibility[j].real, pLcpVisibility[j].imag);
                             ++lcpFullPacketNumber;
                         } else {
                             for (int j = 0;j < numberOfVisibilities;++j)
-                                rcpVisColumn[correlatorPacket.D.Blck.Cfg.Frequency][rcpVisColumnOffset + j] = pRcpVisibility[j];
+                                rcpVisColumn[currentFrequency][rcpVisColumnOffset + j] = complex<float>(pRcpVisibility[j].real, pRcpVisibility[j].imag);
                             ++rcpFullPacketNumber;
                         }
                     }
@@ -191,16 +197,19 @@ void MainWindow::on_correlatorClient_read(){
                         lcpFullPacketNumber = 0;
                         rcpFullPacketNumber = 0;
                     }
-                } else {
-                    msg.sprintf("offset %d", correlatorPacket.D.Blck.DtBlck.Offset);
-                    ui->logText->append(msg);
                 }
-//                ui->plotter->graph(0)->addData(packetNumber, *(reinterpret_cast<uint32_t*>(pDataPacket + correlatorPacket.D.Blck.DtBlck.Offset + fitsDataOffset)));
+            } else if (correlatorPacket.H.DtSz == 0){
+                currentFrequency = correlatorPacket.D.Blck.Cfg.Frequency;
+                currentPolarization = correlatorPacket.D.Blck.Cfg.Polarization;
+                msg.sprintf("P %d, f %d, lcpVis %f, rcpVis %f", correlatorPacket.D.Blck.Cfg.Polarization, correlatorPacket.D.Blck.Cfg.Frequency,
+                            lcpVisColumn[showFrequency][lcpVisColumnOffset].real(), rcpVisColumn[showFrequency][rcpVisColumnOffset].real());
+                ui->logText->append(msg);
             }
             break;
         }
         ++packetNumber;
-        ui->plotter->graph(1)->addData(packetNumber, lcpFullPacketNumber*100);
+        ui->plotter->graph(0)->addData(packetNumber, lcpVisColumn[showFrequency][lcpVisColumnOffset].real());
+        ui->plotter->graph(1)->addData(packetNumber, rcpVisColumn[showFrequency][rcpVisColumnOffset].real());
         ui->plotter->xAxis->setRange(0, packetNumber + 20);
         ui->plotter->replot();
     }
