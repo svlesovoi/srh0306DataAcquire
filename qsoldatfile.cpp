@@ -24,46 +24,46 @@
 #include <qtextstream.h>
 
 //namespace std {
-/*
-QMessageBox::information(NULL,"",solDayText.mid(12,11));
-QMessageBox::information(NULL,"",solDayText.mid(23,10));
-QMessageBox::information(NULL,"",solDayText.mid(33,6));
-QMessageBox::information(NULL,"",solDayText.mid(39,5));
-QMessageBox::information(NULL,"",solDayText.mid(44,5));
-QMessageBox::information(NULL,"",solDayText.mid(49,6));
-QMessageBox::information(NULL,"",solDayText.mid(55,6));
-*/
 void QSoldatFile::SSRTsolarDataRecord::fromString(QString& recordString, QSoldatFile* pOwner){
-	QString aux;
-	aux = recordString.mid(12,11);
+/*
+        QMessageBox::information(NULL,"",   solDayText.mid(16,11) + " " +
+                                            solDayText.mid(28,10) + " " +
+                                            solDayText.mid(40,5) + " " +
+                                            solDayText.mid(46,5) + " " +
+                                            solDayText.mid(52,5) + " " +
+                                            solDayText.mid(58,6) + " " +
+                                            solDayText.mid(65,6));
+*/
+    QString aux;
+    aux = recordString.mid(16,11);
 	declination =	aux.mid(1,2).toDouble() * 3600.	+ 
 			aux.mid(4,2).toDouble() * 60.	+
 			aux.mid(7,4).toDouble();
 	declination *= aux[0] == '-' ? -1. : 1.;
 	declination  = pOwner->arcsecToRad(declination);
 
-	aux = recordString.mid(23,10);
+    aux = recordString.mid(28,10);
 	culmination =	aux.mid(0,2).toDouble() * 3600.	+ 
 			aux.mid(3,2).toDouble() * 60.	+
 			aux.mid(6,4).toDouble();
 
-	aux = recordString.mid(33,6);
+    aux = recordString.mid(40,5);
 	radius = aux.toDouble();
 	radius = pOwner->arcminToRad(radius);
 	
-	aux = recordString.mid(39,5);
+    aux = recordString.mid(46,5);
 	P = aux.toDouble();
 	P = pOwner->degToRad(P);
 
-	aux = recordString.mid(44,5);
+    aux = recordString.mid(52,5);
 	B = aux.toDouble();
 	B = pOwner->degToRad(B);
 
-	aux = recordString.mid(49,6);
+    aux = recordString.mid(58,6);
 	L = aux.toDouble();
 	L = pOwner->degToRad(L);
 
-	aux = recordString.mid(55,6);
+    aux = recordString.mid(65,6);
 	dDdt = aux.toDouble();
 	dDdt = pOwner->arcsecToRad(dDdt) / 3600.;
 
@@ -75,15 +75,15 @@ void QSoldatFile::SSRTsolarDataRecord::fromString(QString& recordString, QSoldat
 QSoldatFile::QSoldatFile()
 : QFile(),
 m_currentDay(0),
-m_n(128.),
-m_pi(3.14159265358979323846),	
-m_phi(0.903338787600965),			//[rad]
 m_c(2.99793e8),					//[m/s]
+m_n(128.),
 m_base(4.9),					//[m]
-m_frequency(5730000000.),			//[Hz]
-m_w(15.*3.14159265358979323846/(180.*3600.))	//[rad/s]
+m_pi(3.14159265358979323846),
+m_phi(0.903338787600965),			//[rad]
+m_w(15.*3.14159265358979323846/(180.*3600.)),	//[rad/s]
+m_frequency(5730000000.)			//[Hz]
 {
-	m_pRecords = 0;
+    m_pRecords = nullptr;
 }
 
 QSoldatFile::~QSoldatFile(){
@@ -109,21 +109,22 @@ bool QSoldatFile::fromFile(QString& soldatName){
 		int solDayTextLength = solDayText.length() + 2;
 		m_recordsAmount = (size() - headerSize) / solDayTextLength;
 		m_pRecords = new SSRTsolarDataRecord[m_recordsAmount];
-		solDayText.replace(QChar(solDayText[0]),"|");
+        solDayText.replace(QChar(solDayText[0]),"|");
 		int i = 0;
 		m_pRecords[0].fromString(solDayText,this);
-		for (int i = 1;i < m_recordsAmount;++i) { 
+        for (int i = 1;i < m_recordsAmount;++i) {
 			solDayText = soldatText.readLine();
 			m_pRecords[i].fromString(solDayText,this);
 /*
-if (i == 315){
-QMessageBox::information(NULL,"",solDayText);
-QString msg;
-msg.sprintf("%f",m_pRecords[i].culmination);
-QMessageBox::information(NULL,"",msg);
-}
-*/
-		}
+            if (i == 10390)
+            QMessageBox::information(NULL,"",   solDayText.mid(16,11) + " " +
+                                                solDayText.mid(28,10) + " " +
+                                                solDayText.mid(40,5) + " " +
+                                                solDayText.mid(46,5) + " " +
+                                                solDayText.mid(52,5) + " " +
+                                                solDayText.mid(58,6) + " " +
+                                                solDayText.mid(65,6));*/
+        }
 		close();
 		double	T2	= 48.*3600.;
 		double	H2	= 4. * m_pi;
@@ -179,7 +180,7 @@ bool QSoldatFile::IsValidTime(){
 int QSoldatFile::calcEastWestOrder(){
 	double cosP = sin(TDHourAngle())*cos(TDDeclination());
 	double dOrder = cosP * m_base * m_frequency / m_c;
-	return dOrder < 0. ? (short)(dOrder - .5) : (short)(dOrder + .5);
+    return dOrder < 0. ? static_cast<short>(dOrder - .5) : static_cast<short>(dOrder + .5);
 }
 
 int QSoldatFile::calcNorthSouthOrder(){
@@ -187,7 +188,7 @@ int QSoldatFile::calcNorthSouthOrder(){
 	double D = TDDeclination();
 	double cosQ = cos(H)*cos(D)*sin(m_phi) - sin(D)*cos(m_phi);
 	double dOrder = cosQ * m_base * m_frequency / m_c;
-	return dOrder < 0. ? (short)(dOrder - .5) : (short)(dOrder + .5);
+    return dOrder < 0. ? static_cast<short>(dOrder - .5) : static_cast<short>(dOrder + .5);
 }
 
 int QSoldatFile::EastWestOrder(double t){
@@ -216,10 +217,10 @@ QString QSoldatFile::Culmination(){
 	QString strResult;
 	if (m_recordsAmount){
 		double sec = m_pRecords[m_currentDay].culmination;
-		int hour = (int)(sec / 3600.);	sec -= hour * 3600.;
-		int min  = (int)(sec / 60.);	sec -= min * 60.;
-		int iSec = (int)sec;
-		int rSec = (int)((sec - iSec) * 1000.);
+        int hour = static_cast<int>(sec / 3600.);	sec -= hour * 3600.;
+        int min  = static_cast<int>(sec / 60.);	sec -= min * 60.;
+        int iSec = static_cast<int>(sec);
+        int rSec = static_cast<int>((sec - iSec) * 1000.);
 		strResult.sprintf("%02u:%02u:%02u.%03u",hour,min,iSec,rSec);
 	}
 	else	
@@ -231,10 +232,10 @@ QString QSoldatFile::Declination(){
 	QString strResult;
 	if (m_recordsAmount){
 		double sec = radToArcsec(fabs(m_pRecords[m_currentDay].declination));
-		int deg = (int)(sec / 3600.);	sec -= deg * 3600.;
-		int min = (int)(sec / 60.);	sec -= min * 60.;
-		int iSec = (int)sec;
-		int rSec = (int)((sec - iSec) * 1000.);
+        int deg = static_cast<int>(sec / 3600.);	sec -= deg * 3600.;
+        int min = static_cast<int>(sec / 60.);	sec -= min * 60.;
+        int iSec = static_cast<int>(sec);
+        int rSec = static_cast<int>((sec - iSec) * 1000.);
 		strResult.sprintf("%s%02u:%02u:%02u.%03u",
 		m_pRecords[m_currentDay].declination < 0. ? "-":" ",deg,min,iSec,rSec);
 	}
@@ -334,14 +335,14 @@ int QSoldatFile::TEastWestOrder(double frequency){
 	double f = frequency == 0. ? m_frequency : frequency;
 	double cosP = sin(TDHourAngle())*cos(TDDeclination());
 	double dOrder = cosP * m_base * f / m_c;
-	return dOrder < 0. ? (int)(dOrder - .5) : (int)(dOrder + .5);
+    return dOrder < 0. ? static_cast<int>(dOrder - .5) : static_cast<int>(dOrder + .5);
 }
 
 int QSoldatFile::TNorthSouthOrder(double frequency){
 	double f = frequency == 0. ? m_frequency : frequency;
 	double cosQ = cos(TDHourAngle())*cos(TDDeclination())*sin(m_phi) - sin(TDDeclination())*cos(m_phi);
 	double dOrder = cosQ * m_base * f / m_c;
-	return dOrder < 0. ? (int)(dOrder - .5) : (int)(dOrder + .5);
+    return dOrder < 0. ? static_cast<int>(dOrder - .5) : static_cast<int>(dOrder + .5);
 }
 
 double QSoldatFile::OP(double frequency){
@@ -400,10 +401,10 @@ double QSoldatFile::TDNorthSouthBeamWidth(){
 QString QSoldatFile::EarthRotationPeriod(){
 	QString strResult;
 	double sec = DEarthRotationPeriod();
-	int hour = (int)(sec / 3600.);	sec -= hour * 3600.;
-	int min  = (int)(sec / 60.);	sec -= min * 60.;
-	int iSec = (int)sec;
-	int rSec = (int)((sec - iSec) * 1000.);
+    int hour = static_cast<int>(sec / 3600.);	sec -= hour * 3600.;
+    int min  = static_cast<int>(sec / 60.);	sec -= min * 60.;
+    int iSec = static_cast<int>(sec);
+    int rSec = static_cast<int>((sec - iSec) * 1000.);
 	strResult.sprintf("%02u:%02u:%02u.%03u",hour,min,iSec,rSec);
 	return strResult;
 }
@@ -457,18 +458,13 @@ void QSoldatFile::setCurrentNorthSouthOrder(int nsOrder){
 
 bool QSoldatFile::setDate(QDate& theDate){
 	m_date = theDate;
-	QDate firstDate(1991,12,31);
-	m_currentDay = firstDate.daysTo(m_date);
+    QDate firstDate(1991,12,31);
+    m_currentDay = static_cast<int>(firstDate.daysTo(m_date));
 	return IsValidCurrentDay();
 }
 
 bool QSoldatFile::setTime(double theT){
 	m_time = theT;
-//	const double timeLimit = 22.*3600.;
-//	if (m_time > timeLimit){
-//		m_time = timeLimit - m_time;
-//		m_date = m_date.addDays(1);
-//	}
 	return IsValidTime();
 }
 

@@ -16,10 +16,13 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    qcustomplot.cpp
+    qcustomplot.cpp \
+    qsoldatfile.cpp
 
 HEADERS  += mainwindow.h \
-    qcustomplot.h
+    qcustomplot.h \
+    correlator.h \
+    qsoldatfile.h
 
 FORMS    += mainwindow.ui
 

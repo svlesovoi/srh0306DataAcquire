@@ -26,7 +26,7 @@
 //namespace std {
 
 /**
-	@author Sergey V. Lesovoi,,+7-3952-511841,+7-3952-511214 <sergey@ostrich>
+    @author Sergey V. Lesovoi,+7-914-88-77-965, svlesovoi@gmail.com
 */
 	class QSoldatFile : public QFile{
 public:
@@ -100,22 +100,26 @@ public:
 	bool  	uvwForPair(int A1, int A2, double& u, double& v, double& w);
 
 	void	hor2eq(double altitude, double azimuth, double& hourAngle, double& declination);
+    int     getCurrentDay() { return m_currentDay; }
+
+    struct SSRTsolarDataRecord{
+    double	culmination;
+    double	declination;
+    double	radius;
+    double	P;
+    double	B;
+    double	L;
+    double	dDdt;
+    double	d2Ddt2;
+    double	dHdt;
+    double	d2Hdt2;
+    void	fromString(QString&,QSoldatFile*);
+    };
+    struct SSRTsolarDataRecord* getCurrentRecord() {return m_pRecords + m_currentDay; }
 
 private:
 	QString m_solarDataTitleString;
-	struct SSRTsolarDataRecord{
-		double	culmination;
-		double	declination;
-		double	radius;
-		double	P;
-		double	B;
-		double	L;
-		double	dDdt;
-		double	d2Ddt2;
-		double	dHdt;
-		double	d2Hdt2;
-		void	fromString(QString&,QSoldatFile*);
-	} *m_pRecords;
+    struct SSRTsolarDataRecord* m_pRecords;
 
 	int m_recordsAmount;
 	int m_currentDay;
