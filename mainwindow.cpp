@@ -31,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent) :
     QSettings settings;
 
     correlatorIP = settings.value("network/correlatorIP", "10.0.5.179").toString();
+    localOscillatorIP = settings.value("network/localOscillatorIP", "10.1.1.45").toString();
     correlatorPort = settings.value("network/correlatorPort", 56565).toInt();
     SyncDriverIP = settings.value("network/SyncDriverIP", "10.0.5.179").toString();
     SyncDriverPort = settings.value("network/SyncDriverPort", 56566).toInt();
@@ -45,6 +46,9 @@ MainWindow::MainWindow(QWidget *parent) :
     delayTracking = settings.value("receiver/delayTracking", 1).toBool();
     fringeStopping = settings.value("receiver/fringeStopping", 1).toBool();
     autoStart = settings.value("receiver/autoStart", 1).toBool();
+    autoStop = settings.value("receiver/autoStop", 0).toBool();
+    autoStopHour = settings.value("receiver/autoStopHour", 10).toInt();
+    autoStopMinute = settings.value("receiver/autoStopMinute", 10).toInt();
 
     frequencyListSize = settings.value("FITS/frequencyListSize", 32).toUInt();
     frequencyList = new unsigned int[frequencyListSize];
@@ -72,6 +76,7 @@ MainWindow::MainWindow(QWidget *parent) :
     pNorthAntennaFrontEndID = new unsigned int[northAntennaNumber];
     pNorthAntennaFeedID = new unsigned int[northAntennaNumber];
     pNorthAntennaDiameter = new float[northAntennaNumber];
+    pNorthAntennaDelay = new unsigned int[northAntennaNumber];
     pNorthAntennaX = new int[northAntennaNumber];
     pNorthAntennaY = new int[northAntennaNumber];
     pNorthAntennaZ = new int[northAntennaNumber];
@@ -80,16 +85,17 @@ MainWindow::MainWindow(QWidget *parent) :
     settings.beginReadArray("NorthAntennaDescriptor");
     for (unsigned int i = 0;i < northAntennaNumber;++i){
         settings.setArrayIndex(i);
-        QStringList n_r_c_x_y_z_fE_feed = settings.value("NorthAntennaDescriptor","N3001, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
-        pNorthAntennaName[i] = QString(n_r_c_x_y_z_fE_feed[0]);
-        pNorthAntennaReceiver[i] = n_r_c_x_y_z_fE_feed[1].toUInt() - 1;
-        pNorthAntennaChannel[i] = n_r_c_x_y_z_fE_feed[2].toUInt() - 1;
-        pNorthAntennaX[i] = n_r_c_x_y_z_fE_feed[3].toInt();
-        pNorthAntennaY[i] = n_r_c_x_y_z_fE_feed[4].toInt();
-        pNorthAntennaZ[i] = n_r_c_x_y_z_fE_feed[5].toInt();
-        pNorthAntennaFrontEndID[i] = n_r_c_x_y_z_fE_feed[6].toUInt();
-        pNorthAntennaFeedID[i] = n_r_c_x_y_z_fE_feed[7].toUInt();
-        pNorthAntennaDiameter[i] = n_r_c_x_y_z_fE_feed[8].toUInt();
+        QStringList n_r_c_x_y_z_fE_feed_D_T = settings.value("NorthAntennaDescriptor","N3001, 0, 0, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
+        pNorthAntennaName[i] = QString(n_r_c_x_y_z_fE_feed_D_T[0]);
+        pNorthAntennaReceiver[i] = n_r_c_x_y_z_fE_feed_D_T[1].toUInt() - 1;
+        pNorthAntennaChannel[i] = n_r_c_x_y_z_fE_feed_D_T[2].toUInt() - 1;
+        pNorthAntennaX[i] = n_r_c_x_y_z_fE_feed_D_T[3].toInt();
+        pNorthAntennaY[i] = n_r_c_x_y_z_fE_feed_D_T[4].toInt();
+        pNorthAntennaZ[i] = n_r_c_x_y_z_fE_feed_D_T[5].toInt();
+        pNorthAntennaFrontEndID[i] = n_r_c_x_y_z_fE_feed_D_T[6].toUInt();
+        pNorthAntennaFeedID[i] = n_r_c_x_y_z_fE_feed_D_T[7].toUInt();
+        pNorthAntennaDiameter[i] = n_r_c_x_y_z_fE_feed_D_T[8].toUInt();
+        pNorthAntennaDelay[i] = n_r_c_x_y_z_fE_feed_D_T[9].toUInt();
         pNorthAntennaIndex[i] = pNorthAntennaReceiver[i]*16 + pNorthAntennaChannel[i];
     }
     settings.endArray();
@@ -102,6 +108,7 @@ MainWindow::MainWindow(QWidget *parent) :
     pEastAntennaFrontEndID = new unsigned int[eastAntennaNumber];
     pEastAntennaFeedID = new unsigned int[eastAntennaNumber];
     pEastAntennaDiameter = new float[eastAntennaNumber];
+    pEastAntennaDelay = new unsigned int[eastAntennaNumber];
     pEastAntennaX = new int[eastAntennaNumber];
     pEastAntennaY = new int[eastAntennaNumber];
     pEastAntennaZ = new int[eastAntennaNumber];
@@ -110,16 +117,17 @@ MainWindow::MainWindow(QWidget *parent) :
     settings.beginReadArray("EastAntennaDescriptor");
     for (unsigned int i = 0;i < eastAntennaNumber;++i){
         settings.setArrayIndex(i);
-        QStringList n_r_c_x_y_z_fE_feed = settings.value("EastAntennaDescriptor","E3001, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
-        pEastAntennaName[i] = QString(n_r_c_x_y_z_fE_feed[0]);
-        pEastAntennaReceiver[i] = n_r_c_x_y_z_fE_feed[1].toUInt() - 1;
-        pEastAntennaChannel[i] = n_r_c_x_y_z_fE_feed[2].toUInt() - 1;
-        pEastAntennaX[i] = n_r_c_x_y_z_fE_feed[3].toInt();
-        pEastAntennaY[i] = n_r_c_x_y_z_fE_feed[4].toInt();
-        pEastAntennaZ[i] = n_r_c_x_y_z_fE_feed[5].toInt();
-        pEastAntennaFrontEndID[i] = n_r_c_x_y_z_fE_feed[6].toUInt();
-        pEastAntennaFeedID[i] = n_r_c_x_y_z_fE_feed[7].toUInt();
-        pEastAntennaDiameter[i] = n_r_c_x_y_z_fE_feed[8].toUInt();
+        QStringList n_r_c_x_y_z_fE_feed_D_T = settings.value("EastAntennaDescriptor","E3001, 0, 0, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
+        pEastAntennaName[i] = QString(n_r_c_x_y_z_fE_feed_D_T[0]);
+        pEastAntennaReceiver[i] = n_r_c_x_y_z_fE_feed_D_T[1].toUInt() - 1;
+        pEastAntennaChannel[i] = n_r_c_x_y_z_fE_feed_D_T[2].toUInt() - 1;
+        pEastAntennaX[i] = n_r_c_x_y_z_fE_feed_D_T[3].toInt();
+        pEastAntennaY[i] = n_r_c_x_y_z_fE_feed_D_T[4].toInt();
+        pEastAntennaZ[i] = n_r_c_x_y_z_fE_feed_D_T[5].toInt();
+        pEastAntennaFrontEndID[i] = n_r_c_x_y_z_fE_feed_D_T[6].toUInt();
+        pEastAntennaFeedID[i] = n_r_c_x_y_z_fE_feed_D_T[7].toUInt();
+        pEastAntennaDiameter[i] = n_r_c_x_y_z_fE_feed_D_T[8].toUInt();
+        pEastAntennaDelay[i] = n_r_c_x_y_z_fE_feed_D_T[9].toUInt();
         pEastAntennaIndex[i] = pEastAntennaReceiver[i]*16 + pEastAntennaChannel[i];
     }
     settings.endArray();
@@ -132,6 +140,7 @@ MainWindow::MainWindow(QWidget *parent) :
     pWestAntennaFrontEndID = new unsigned int[westAntennaNumber];
     pWestAntennaFeedID = new unsigned int[westAntennaNumber];
     pWestAntennaDiameter = new float[westAntennaNumber];
+    pWestAntennaDelay = new unsigned int[westAntennaNumber];
     pWestAntennaX = new int[westAntennaNumber];
     pWestAntennaY = new int[westAntennaNumber];
     pWestAntennaZ = new int[westAntennaNumber];
@@ -140,16 +149,17 @@ MainWindow::MainWindow(QWidget *parent) :
     settings.beginReadArray("WestAntennaDescriptor");
     for (unsigned int i = 0;i < westAntennaNumber;++i){
         settings.setArrayIndex(i);
-        QStringList n_r_c_x_y_z_fE_feed = settings.value("WestAntennaDescriptor","W3001, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
-        pWestAntennaName[i] = QString(n_r_c_x_y_z_fE_feed[0]);
-        pWestAntennaReceiver[i] = n_r_c_x_y_z_fE_feed[1].toUInt() - 1;
-        pWestAntennaChannel[i] = n_r_c_x_y_z_fE_feed[2].toUInt() - 1;
-        pWestAntennaX[i] = n_r_c_x_y_z_fE_feed[3].toInt();
-        pWestAntennaY[i] = n_r_c_x_y_z_fE_feed[4].toInt();
-        pWestAntennaZ[i] = n_r_c_x_y_z_fE_feed[5].toInt();
-        pWestAntennaFrontEndID[i] = n_r_c_x_y_z_fE_feed[6].toUInt();
-        pWestAntennaFeedID[i] = n_r_c_x_y_z_fE_feed[7].toUInt();
-        pWestAntennaDiameter[i] = n_r_c_x_y_z_fE_feed[8].toUInt();
+        QStringList n_r_c_x_y_z_fE_feed_D_T = settings.value("WestAntennaDescriptor","W3001, 0, 0, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
+        pWestAntennaName[i] = QString(n_r_c_x_y_z_fE_feed_D_T[0]);
+        pWestAntennaReceiver[i] = n_r_c_x_y_z_fE_feed_D_T[1].toUInt() - 1;
+        pWestAntennaChannel[i] = n_r_c_x_y_z_fE_feed_D_T[2].toUInt() - 1;
+        pWestAntennaX[i] = n_r_c_x_y_z_fE_feed_D_T[3].toInt();
+        pWestAntennaY[i] = n_r_c_x_y_z_fE_feed_D_T[4].toInt();
+        pWestAntennaZ[i] = n_r_c_x_y_z_fE_feed_D_T[5].toInt();
+        pWestAntennaFrontEndID[i] = n_r_c_x_y_z_fE_feed_D_T[6].toUInt();
+        pWestAntennaFeedID[i] = n_r_c_x_y_z_fE_feed_D_T[7].toUInt();
+        pWestAntennaDiameter[i] = n_r_c_x_y_z_fE_feed_D_T[8].toUInt();
+        pWestAntennaDelay[i] = n_r_c_x_y_z_fE_feed_D_T[9].toUInt();
         pWestAntennaIndex[i] = pWestAntennaReceiver[i]*16 + pWestAntennaChannel[i];
     }
     settings.endArray();
@@ -157,15 +167,16 @@ MainWindow::MainWindow(QWidget *parent) :
 //--------------------------------------------------CenterAntennaDescriptor-------------------------------------------------------------------
     settings.beginReadArray("CenterAntennaDescriptor");
     settings.setArrayIndex(0);
-    QStringList n_r_c_x_y_z_fE_feed = settings.value("CenterAntennaDescriptor","F0306C00, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
-    centerAntennaName = QString(n_r_c_x_y_z_fE_feed[0]);
-    centerAntennaReceiver = n_r_c_x_y_z_fE_feed[1].toUInt() - 1;
-    centerAntennaChannel = n_r_c_x_y_z_fE_feed[2].toUInt() - 1;
-    centerAntennaX = n_r_c_x_y_z_fE_feed[3].toInt();
-    centerAntennaY = n_r_c_x_y_z_fE_feed[4].toInt();
-    centerAntennaZ = n_r_c_x_y_z_fE_feed[5].toInt();
+    QStringList n_r_c_x_y_z_fE_feed_D_T = settings.value("CenterAntennaDescriptor","F0306C00, 0, 0, 0, 0, 0, 0, 0, 0, 0").toString().split(",");
+    centerAntennaName = QString(n_r_c_x_y_z_fE_feed_D_T[0]);
+    centerAntennaReceiver = n_r_c_x_y_z_fE_feed_D_T[1].toUInt() - 1;
+    centerAntennaChannel = n_r_c_x_y_z_fE_feed_D_T[2].toUInt() - 1;
+    centerAntennaX = n_r_c_x_y_z_fE_feed_D_T[3].toInt();
+    centerAntennaY = n_r_c_x_y_z_fE_feed_D_T[4].toInt();
+    centerAntennaZ = n_r_c_x_y_z_fE_feed_D_T[5].toInt();
     centerAntennaIndex = centerAntennaReceiver*16 + centerAntennaChannel;
-    centerAntennaDiameter = n_r_c_x_y_z_fE_feed[8].toInt();
+    centerAntennaDiameter = n_r_c_x_y_z_fE_feed_D_T[8].toInt();
+    centerAntennaDelay = n_r_c_x_y_z_fE_feed_D_T[9].toUInt();
     settings.endArray();
 
 //--------------------------------------------------EastWestAntennaDescriptor---------------------------------------------------------------
@@ -237,25 +248,14 @@ MainWindow::MainWindow(QWidget *parent) :
             unsigned int V = pEastAntennaReceiver[j]*16 + pEastAntennaChannel[j];
             pVisIndToCorrPacketInd[visInd] = visibilityIndexAsHV(H, V);
             pVisibilitySign[visInd] = H > V ? 1 : -1;
-            pVis0306AntennaNameA[visInd] = pNorthAntennaName[i];
-            pVis0306AntennaNameB[visInd] = pEastAntennaName[j];
+//            pVis0306AntennaNameA[visInd] = pNorthAntennaName[i];
+//            pVis0306AntennaNameB[visInd] = pEastAntennaName[j];
+            pVis0306AntennaNameB[visInd] = pNorthAntennaName[i];
+            pVis0306AntennaNameA[visInd] = pEastAntennaName[j];
         }
     }
 
 //northNorth vis
-/*
-    for (unsigned int i = 0, visInd = northEastWestVisNumber;i < northAntennaNumber - 1;++i){
-        unsigned int H = pNorthAntennaReceiver[i]*16 + pNorthAntennaChannel[i];
-        for (unsigned int j = i + 1;j < northAntennaNumber;++j){
-            unsigned int V = pNorthAntennaReceiver[j]*16 + pNorthAntennaChannel[j];
-            pVisIndToFitsInd[visInd] = visInd;
-            pVisIndToCorrPacketInd[visInd] = visibilityIndexAsHV(H, V);
-            pVisibilitySign[visInd] = H > V ? 1 : -1;
-            pVis0306AntennaNameA[visInd] = pNorthAntennaName[i];
-            pVis0306AntennaNameB[visInd++] = pNorthAntennaName[j];
-        }
-    }
-*/
     for (unsigned int i = 1, visInd = northEastWestVisNumber;i < northAntennaNumber;++i){
         for (unsigned int j = 0;j < northAntennaNumber - i;++j){
             unsigned int H = pNorthAntennaReceiver[j]*16 + pNorthAntennaChannel[j];
@@ -263,37 +263,14 @@ MainWindow::MainWindow(QWidget *parent) :
             pVisIndToFitsInd[visInd] = visInd;
             pVisIndToCorrPacketInd[visInd] = visibilityIndexAsHV(H, V);
             pVisibilitySign[visInd] = H > V ? 1 : -1;
-            pVis0306AntennaNameA[visInd] = pNorthAntennaName[j];
-            pVis0306AntennaNameB[visInd++] = pNorthAntennaName[j+i];
+//            pVis0306AntennaNameA[visInd] = pNorthAntennaName[j];
+//            pVis0306AntennaNameB[visInd++] = pNorthAntennaName[j+i];
+            pVis0306AntennaNameB[visInd] = pNorthAntennaName[j];
+            pVis0306AntennaNameA[visInd++] = pNorthAntennaName[j+i];
         }
     }
 
     eastWestZeroVisColumn.resize(northAntennaNumber + westAntennaNumber + 1 + eastAntennaNumber);
-//eastWestEastWest vis
-/*
-    for (unsigned int i = 0, visInd = northEastWestVisNumber + northVisNumber,zeroRowInd = 0;i < eastWestAntennaNumber - 1;++i){
-        unsigned int H = pEastWestAntennaReceiver[i]*16 + pEastWestAntennaChannel[i];
-        for (unsigned int j = i + 1;j < eastWestAntennaNumber;++j){
-            if (i == westAntennaNumber || j == westAntennaNumber){
-                if (j == westAntennaNumber){
-                    __pFirstRowNames[westAntennaNumber - 1 - zeroRowInd] = pEastWestAntennaName[i] + " " + pEastWestAntennaName[j];
-                    eastWestZeroVisColumn[westAntennaNumber - 1 - zeroRowInd] = visInd;
-                } else {
-                    __pFirstRowNames[zeroRowInd + 1] = pEastWestAntennaName[i] + " " + pEastWestAntennaName[j];
-                    eastWestZeroVisColumn[zeroRowInd + 1] = visInd;
-                }
-                ++zeroRowInd;
-            }
-            unsigned int V = pEastWestAntennaReceiver[j]*16 + pEastWestAntennaChannel[j];
-            pVisIndToFitsInd[visInd] = visInd;
-            pVisIndToCorrPacketInd[visInd] = visibilityIndexAsHV(H, V);
-            pVisibilitySign[visInd] = H > V ? 1 : -1;
-            pVis0306AntennaNameA[visInd] = pEastWestAntennaName[i];
-            pVis0306AntennaNameB[visInd++] = pEastWestAntennaName[j];
-        }
-    }
-
-*/
     for (unsigned int i = 1, visInd = northEastWestVisNumber + northVisNumber,zeroRowInd = 0;i < eastWestAntennaNumber;++i){
         for (unsigned int j = 0;j < eastWestAntennaNumber - i;++j){
             if (pEastWestAntennaName[j] == "C30" || pEastWestAntennaName[j+i] == "C30"){
@@ -330,6 +307,7 @@ MainWindow::MainWindow(QWidget *parent) :
     pAntennaX = new int[amp0306Number];
     pAntennaY = new int[amp0306Number];
     pAntennaZ = new int[amp0306Number];
+    pAntennaDelay = new unsigned int[amp0306Number];
 
     pAntennaReceiver = new unsigned int[amp0306Number];
     pAntennaReceiverChannel = new unsigned int[amp0306Number];
@@ -344,6 +322,7 @@ MainWindow::MainWindow(QWidget *parent) :
         pAntennaX[ant] = pNorthAntennaX[ant];
         pAntennaY[ant] = pNorthAntennaY[ant];
         pAntennaZ[ant] = pNorthAntennaZ[ant];
+        pAntennaDelay[ant] = pNorthAntennaDelay[ant];
     }
     for (;ant < northAntennaNumber + westAntennaNumber;++ant){
         pAmpIndToFitsInd[ant] = ant;
@@ -355,6 +334,7 @@ MainWindow::MainWindow(QWidget *parent) :
         pAntennaX[ant] = pWestAntennaX[ant - northAntennaNumber];
         pAntennaY[ant] = pWestAntennaY[ant - northAntennaNumber];
         pAntennaZ[ant] = pWestAntennaZ[ant - northAntennaNumber];
+        pAntennaDelay[ant] = pWestAntennaDelay[ant - northAntennaNumber];
     }
     pAmpIndToFitsInd[ant] = ant;
     pAntennaReceiver[ant] = centerAntennaReceiver;
@@ -366,6 +346,7 @@ MainWindow::MainWindow(QWidget *parent) :
     pAntennaX[ant] = centerAntennaX;
     pAntennaY[ant] = centerAntennaY;
     pAntennaZ[ant] = centerAntennaZ;
+    pAntennaDelay[ant] = centerAntennaDelay;
 
     for (++ant;ant < northAntennaNumber + westAntennaNumber + 1 + eastAntennaNumber;++ant){
         pAmpIndToFitsInd[ant] = ant;
@@ -377,6 +358,7 @@ MainWindow::MainWindow(QWidget *parent) :
         pAntennaX[ant] = pEastAntennaX[ant - northAntennaNumber - 1 - westAntennaNumber];
         pAntennaY[ant] = pEastAntennaY[ant - northAntennaNumber - 1 - westAntennaNumber];
         pAntennaZ[ant] = pEastAntennaZ[ant - northAntennaNumber - 1 - westAntennaNumber];
+        pAntennaDelay[ant] = pEastAntennaDelay[ant - northAntennaNumber - 1 - westAntennaNumber];
     }
 
 //--------------------------------------------------rawDataAndFITS---------------------------------------------------------------
@@ -491,7 +473,8 @@ MainWindow::MainWindow(QWidget *parent) :
         for (unsigned int rec = 0;rec < 8;++rec)
             for (unsigned int chan = 0;chan < 16;++chan){
                 unsigned int posInd = rec*16 + chan;
-                out << rec + 1 << " " << chan + 1 << " " << " " <<  pAntennaX[pReceiverChannelToInd[posInd]] << " " << pAntennaY[pReceiverChannelToInd[posInd]] << "\n";
+                out << rec + 1 << " " << chan + 1 << " " << " " <<  pAntennaX[pReceiverChannelToInd[posInd]] << " " << pAntennaY[pReceiverChannelToInd[posInd]] << " "
+                    << pAntennaDelay[posInd] << "\n";
             }
         out << "\nvis" << "\n";
         for (unsigned int i = 0;i < vis0306Number;++i)
@@ -578,9 +561,19 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->showNWEEButton->setChecked(showNWEE);
     ui->delayTrackingButton->setChecked(delayTracking);
     ui->fringeStoppingButton->setChecked(fringeStopping);
-    if (autoStart){
+
+//    localOscillator = new QG7M(localOscillatorIP);
+
+    if (autoStart)
         pCorrelatorClient->connectToHost(correlatorIP, static_cast<unsigned short>(correlatorPort));
+    if (autoStop){
+        QDateTime startTime = QDateTime::currentDateTime();
+        QDateTime stopTime = startTime;
+        stopTime.setTime(QTime(autoStopHour, autoStopMinute));
+        QTimer::singleShot(startTime.msecsTo(stopTime),this,&MainWindow::stopSyncDriver);
     }
+
+
 }
 
 MainWindow::~MainWindow(){
@@ -610,11 +603,9 @@ void MainWindow::on_correlatorClient_connected(){
     setTypicalPacketPrefix(&requestPacket, eRqst_GetProperty);
     pCorrelatorClient->write(reinterpret_cast<const char*>(&requestPacket), sizeof(tPkg_Head));
     if (autoStart){
+        ui->localOscillatorStartStop->setChecked(true);
+        on_localOscillatorStartStop_clicked(true);
         ui->connectButton->setChecked(true);
-        initDigitalReceivers();
-        setCorrelatorTime();
-        setDelayTracking();
-        setFringeStopping();
         ui->initCorrelatorButton->setChecked(true);
         initCorrelator(true);
 
@@ -645,13 +636,24 @@ void MainWindow::on_SyncDriverGetConfigButton_clicked(){
     pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
 }
 
+void MainWindow::startSyncDriver(){
+    ui->SyncDriverConnect->setChecked(true);
+    ui->SyncDriverSetConfigButton->setChecked(true);
+    syncDriverStartStop(true);
+}
+
+void MainWindow::stopSyncDriver(){
+    ui->localOscillatorStartStop->setChecked(false);
+    on_localOscillatorStartStop_clicked(false);
+    ui->SyncDriverConnect->setChecked(false);
+    ui->SyncDriverSetConfigButton->setChecked(false);
+    syncDriverStartStop(false);
+}
+
 void MainWindow::on_SyncDriverClient_connected(){
     ui->logText->append(QString("SyncDriver connected"));
-    if (autoStart){
-        ui->SyncDriverConnect->setChecked(true);
-        ui->SyncDriverSetConfigButton->setChecked(true);
-        syncDriverStartStop(true);
-    }
+    if (autoStart)
+        QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
 }
 
 void MainWindow::on_SyncDriverClient_disconnected(){
@@ -683,6 +685,12 @@ void MainWindow::syncDriverStartStop(bool start){
     else
         SyncDriverPacket.D.Cfg.Cntrl = 0x00;
     pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
+    if (start == false and autoStop){
+        pSyncDriverClient->disconnectFromHost();
+        initCorrelator(false);
+        pCorrelatorClient->disconnectFromHost();
+         QApplication::quit();
+    }
 }
 
 void MainWindow::on_correlatorClient_parse(){
@@ -1068,22 +1076,23 @@ void MainWindow::initDigitalReceivers(){
         setRgPacket.D.Rg32.Rg[1] = 1 << rec; //receiver selected
         for(int channel = 0;channel < 16;++channel){
             unsigned int r_c_ind = rec*16 + channel;
-            setRgPacket.D.Rg32.Rg[channel*4 + 11] =  pAntennaX[pReceiverChannelToInd[r_c_ind]]; //
-            setRgPacket.D.Rg32.Rg[channel*4 + 12] =  pAntennaY[pReceiverChannelToInd[r_c_ind]]; //
-            setRgPacket.D.Rg32.Rg[channel*4 + 13] =  pAntennaZ[pReceiverChannelToInd[r_c_ind]]; //
-            setRgPacket.D.Rg32.Rg[channel*4 + 14] = 0; //
+            setRgPacket.D.Rg32.Rg[channel*4 + 11] = pAntennaX[pReceiverChannelToInd[r_c_ind]]; //
+            setRgPacket.D.Rg32.Rg[channel*4 + 12] = pAntennaY[pReceiverChannelToInd[r_c_ind]]; //
+            setRgPacket.D.Rg32.Rg[channel*4 + 13] = pAntennaZ[pReceiverChannelToInd[r_c_ind]]; //
+            setRgPacket.D.Rg32.Rg[channel*4 + 14] = pAntennaDelay[pReceiverChannelToInd[r_c_ind]]; //
+//            setRgPacket.D.Rg32.Rg[channel*4 + 14] = (unsigned int)((float)pAntennaDelay[pReceiverChannelToInd[r_c_ind]]*1000. + .5); //
         }
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
     }
     setBitWindowPosition(10);
-    setReceiverBitWindowPosition(8,7);
+//    setReceiverBitWindowPosition(8,7);
 }
 
 void MainWindow::setBitWindowPosition(unsigned int bitWindowPosition){
     static tPkg setRgPacket;
     setTypicalPacketPrefix(&setRgPacket, eRqst_Rdr_SetRgs32);
     setRgPacket.D.Rg32.Rg[0] = 0x0F; //receiver chip select address
-    setRgPacket.D.Rg32.Rg[1] = 0x1FF; //1-9 receivers selected
+    setRgPacket.D.Rg32.Rg[1] = 0x1FF; //1-12 receivers selected
     setRgPacket.D.Rg32.Rg[2] = 0x08; //internal receiver address (0x08 FIFO)
     setRgPacket.D.Rg32.Rg[3] = 0x0A2; //Bit window position address
     setRgPacket.D.Rg32.Rg[4] = bitWindowPosition;
@@ -1255,6 +1264,15 @@ void MainWindow::initCorrelator(bool acquire){
         parsingState = 0;
         metaDataReceived = false;
 
+        initDigitalReceivers();
+        setCorrelatorTime();
+        setDelayTracking();
+        setFringeStopping();
+        setFrequencies();
+        syncCorrelator(true);
+        startCorrelator(true);
+/*
+
         setRgPacket.H.Rqst = eRqst_Rdr_SetRgs32;
         setRgPacket.D.Rg32.Count = frequencyListSize + 4;
         setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
@@ -1264,7 +1282,6 @@ void MainWindow::initCorrelator(bool acquire){
         setRgPacket.D.Rg32.Rg[3] = 0;
         for (unsigned int i = 0;i < frequencyListSize;++i)
             setRgPacket.D.Rg32.Rg[i + 4] = frequencyList[i];
-
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
 
         setRgPacket.D.Rg32.Count = 2;
@@ -1276,7 +1293,11 @@ void MainWindow::initCorrelator(bool acquire){
         setRgPacket.H.Rqst = eRqst_SetStateProcessing;//DMA
         setRgPacket.H.DtSz = 0;
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head));
+*/
     } else {
+        startCorrelator(false);
+        syncCorrelator(false);
+/*
         setRgPacket.H.Rqst = eRqst_SetStateIdle;//DMA stop
         setRgPacket.H.DtSz = 0;
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head));
@@ -1287,12 +1308,49 @@ void MainWindow::initCorrelator(bool acquire){
         setRgPacket.D.Rg32.Rg[0] = 1;
         setRgPacket.D.Rg32.Rg[1] = 0; // stop sync
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
+*/
     }
+}
+
+void MainWindow::setFrequencies(){
+    static tPkg setRgPacket;
+    setTypicalPacketPrefix(&setRgPacket, eRqst_Rdr_SetRgs32);
+    setRgPacket.D.Rg32.Rg[0] = 0x0000004;//start address
+    setRgPacket.D.Rg32.Rg[1] = dataDelay;
+    setRgPacket.D.Rg32.Rg[2] = dataDuration;//80 ms 2000000, 100 ms 2500000
+    setRgPacket.D.Rg32.Rg[3] = 0;
+    for (unsigned int i = 0;i < frequencyListSize;++i)
+        setRgPacket.D.Rg32.Rg[i + 4] = frequencyList[i];
+    setRgPacket.D.Rg32.Count = 4 + frequencyListSize;
+    setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
+    pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
+}
+
+void MainWindow::syncCorrelator(bool start){
+    static tPkg setRgPacket;
+    setTypicalPacketPrefix(&setRgPacket, eRqst_Rdr_SetRgs32);
+    setRgPacket.D.Rg32.Rg[0] = 1;
+    if (start)
+        setRgPacket.D.Rg32.Rg[1] = internalSync ? 0x2 : 0x1; // start sync
+    else
+        setRgPacket.D.Rg32.Rg[1] = 0; // stop sync
+    setRgPacket.D.Rg32.Count = 2;
+    setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
+    pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
+}
+
+void MainWindow::startCorrelator(bool start){
+    static tPkg setRgPacket;
+    if (start)
+        setTypicalPacketPrefix(&setRgPacket, eRqst_SetStateProcessing); //DMA start
+    else
+        setTypicalPacketPrefix(&setRgPacket, eRqst_SetStateIdle); //DMA stop
+    setRgPacket.H.DtSz = 0;
+    pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head));
 }
 
 void MainWindow::on_delayTrackingButton_clicked(bool checked){
     delayTracking = checked;
-    setDelayTracking();
 }
 
 void MainWindow::setDelayTracking(){
@@ -1312,7 +1370,6 @@ void MainWindow::setDelayTracking(){
 
 void MainWindow::on_fringeStoppingButton_clicked(bool checked){
     fringeStopping = checked;
-    setFringeStopping();
 }
 
 void MainWindow::setFringeStopping(){
@@ -1569,4 +1626,20 @@ void MainWindow::on_showPolarizationButton_toggled(bool checked){
         ui->showPolarizationButton->setText("LCP");
     else
         ui->showPolarizationButton->setText("RCP");
+}
+
+void MainWindow::on_localOscillatorStartStop_clicked(bool start){
+/*    if (start){
+        QStringList freqList;
+        for (unsigned long i = 0;i < frequencyListSize;++i)
+            freqList.append(QString::number(frequencyList[i]/1000) + " MHz");
+        ui->logText->append(localOscillator->startFrequencyList(freqList));
+        ui->logText->append("LO start");
+        ui->logText->append(localOscillator->getFrequencyList());
+        ui->logText->append(localOscillator->getStatus());
+    } else {
+        ui->logText->append(localOscillator->stopFrequencyList());
+        ui->logText->append("LO stop");
+        ui->logText->append(localOscillator->getStatus());
+    }*/
 }

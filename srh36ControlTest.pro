@@ -17,12 +17,16 @@ TEMPLATE = app
 SOURCES += main.cpp\
         mainwindow.cpp \
     qcustomplot.cpp \
-    qsoldatfile.cpp
+    qsoldatfile.cpp \
+    qg7m.cpp
 
 HEADERS  += mainwindow.h \
     qcustomplot.h \
     correlator.h \
-    qsoldatfile.h
+    qsoldatfile.h \
+    visatype.h \
+    visa.h \
+    qg7m.h
 
 FORMS    += mainwindow.ui
 
@@ -30,6 +34,7 @@ INCLUDEPATH += /usr/include/CCfits \
                 /usr/include/cfitsio
 
 LIBS += -lCCfits \
-        -lcfitsio
+        -lcfitsio \
+        -L /home/svlesovoi/workspace/srh36ControlTest/ -lMiVisa
 
 

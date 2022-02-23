@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1047</width>
+    <width>1252</width>
     <height>851</height>
    </rect>
   </property>
@@ -19,7 +19,7 @@
      <rect>
       <x>60</x>
       <y>50</y>
-      <width>971</width>
+      <width>1171</width>
       <height>361</height>
      </rect>
     </property>
@@ -45,44 +45,15 @@
      <rect>
       <x>10</x>
       <y>740</y>
-      <width>431</width>
+      <width>621</width>
       <height>101</height>
      </rect>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="initCorrelatorButton">
-    <property name="geometry">
-     <rect>
-      <x>550</x>
-      <y>10</y>
-      <width>91</width>
-      <height>31</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Acquire</string>
-    </property>
-    <property name="checkable">
-     <bool>true</bool>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="initReceiversButton">
-    <property name="geometry">
-     <rect>
-      <x>180</x>
-      <y>10</y>
-      <width>101</width>
-      <height>31</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Init receivers</string>
     </property>
    </widget>
    <widget class="QPushButton" name="SyncDriverConnect">
     <property name="geometry">
      <rect>
-      <x>675</x>
+      <x>870</x>
       <y>10</y>
       <width>181</width>
       <height>31</height>
@@ -95,30 +66,17 @@
      <bool>true</bool>
     </property>
    </widget>
-   <widget class="QPushButton" name="SyncDriverGetConfigButton">
-    <property name="geometry">
-     <rect>
-      <x>850</x>
-      <y>10</y>
-      <width>96</width>
-      <height>31</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Get config</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="SyncDriverSetConfigButton">
     <property name="geometry">
      <rect>
-      <x>940</x>
+      <x>1050</x>
       <y>10</y>
-      <width>96</width>
+      <width>191</width>
       <height>31</height>
      </rect>
     </property>
     <property name="text">
-     <string>Set config</string>
+     <string>Start acquisition</string>
     </property>
     <property name="checkable">
      <bool>true</bool>
@@ -177,7 +135,7 @@
      <rect>
       <x>60</x>
       <y>410</y>
-      <width>971</width>
+      <width>1171</width>
       <height>16</height>
      </rect>
     </property>
@@ -190,7 +148,7 @@
      <rect>
       <x>60</x>
       <y>430</y>
-      <width>971</width>
+      <width>1171</width>
       <height>16</height>
      </rect>
     </property>
@@ -311,24 +269,11 @@
      </property>
     </widget>
    </widget>
-   <widget class="QPushButton" name="setTimeButton">
-    <property name="geometry">
-     <rect>
-      <x>280</x>
-      <y>10</y>
-      <width>81</width>
-      <height>31</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Set time</string>
-    </property>
-   </widget>
    <widget class="QPushButton" name="fringeStoppingButton">
     <property name="geometry">
      <rect>
-      <x>470</x>
-      <y>10</y>
+      <x>1120</x>
+      <y>460</y>
       <width>81</width>
       <height>31</height>
      </rect>
@@ -345,7 +290,7 @@
      <rect>
       <x>10</x>
       <y>530</y>
-      <width>431</width>
+      <width>621</width>
       <height>191</height>
      </rect>
     </property>
@@ -395,7 +340,7 @@
    <widget class="QCustomPlot" name="antennaArrayLayoutPlotter" native="true">
     <property name="geometry">
      <rect>
-      <x>460</x>
+      <x>660</x>
       <y>530</y>
       <width>571</width>
       <height>311</height>
@@ -405,8 +350,8 @@
    <widget class="QPushButton" name="delayTrackingButton">
     <property name="geometry">
      <rect>
-      <x>380</x>
-      <y>10</y>
+      <x>1020</x>
+      <y>460</y>
       <width>96</width>
       <height>31</height>
      </rect>
@@ -429,6 +374,38 @@
     </property>
     <property name="text">
      <string>LCP</string>
+    </property>
+    <property name="checkable">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="initCorrelatorButton">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>10</y>
+      <width>161</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Init correlator</string>
+    </property>
+    <property name="checkable">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="localOscillatorStartStop">
+    <property name="geometry">
+     <rect>
+      <x>500</x>
+      <y>10</y>
+      <width>201</width>
+      <height>36</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Start local oscillator</string>
     </property>
     <property name="checkable">
      <bool>true</bool>

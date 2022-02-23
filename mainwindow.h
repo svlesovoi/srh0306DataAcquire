@@ -10,6 +10,7 @@
 
 #include "correlator.h"
 #include "qsoldatfile.h"
+#include "qg7m.h"
 
 #include <CCfits>
 using namespace CCfits;
@@ -102,6 +103,16 @@ private slots:
 
     void setDelayTracking();
 
+    void setFrequencies();
+
+    void syncCorrelator(bool start);
+
+    void startCorrelator(bool start);
+
+    void startSyncDriver();
+
+    void stopSyncDriver();
+
     void on_currentAntennaBSpinBox_valueChanged(int arg1);
 
     void on_antennaGainSpin_valueChanged(int arg1);
@@ -118,11 +129,14 @@ private slots:
 
     void on_SyncDriverSetConfigButton_clicked(bool checked);
 
+    void on_localOscillatorStartStop_clicked(bool checked);
+
 private:
     Ui::MainWindow *ui;
     QTcpSocket* pCorrelatorClient;
     QTcpSocket* pSyncDriverClient;
     QString correlatorIP;
+    QString localOscillatorIP;
     int correlatorPort;
     QString SyncDriverIP;
     int SyncDriverPort;
@@ -164,6 +178,9 @@ private:
     bool delayTracking;
     bool fringeStopping;
     bool autoStart;
+    bool autoStop;
+    int autoStopHour;
+    int autoStopMinute;
 
     float plotterXScale;
     float plotterXOffset;
@@ -224,6 +241,7 @@ private:
     int* pAntennaX;
     int* pAntennaY;
     int* pAntennaZ;
+    unsigned int* pAntennaDelay;
 
     unsigned int northAntennaNumber;
     QString* pNorthAntennaName;
@@ -232,6 +250,7 @@ private:
     unsigned int* pNorthAntennaFrontEndID;
     unsigned int* pNorthAntennaFeedID;
     float* pNorthAntennaDiameter;
+    unsigned int* pNorthAntennaDelay;
     int* pNorthAntennaX;
     int* pNorthAntennaY;
     int* pNorthAntennaZ;
@@ -244,6 +263,7 @@ private:
     unsigned int* pEastAntennaFrontEndID;
     unsigned int* pEastAntennaFeedID;
     float* pEastAntennaDiameter;
+    unsigned int* pEastAntennaDelay;
     int* pEastAntennaX;
     int* pEastAntennaY;
     int* pEastAntennaZ;
@@ -256,6 +276,7 @@ private:
     unsigned int* pWestAntennaFrontEndID;
     unsigned int* pWestAntennaFeedID;
     float* pWestAntennaDiameter;
+    unsigned int* pWestAntennaDelay;
     int* pWestAntennaX;
     int* pWestAntennaY;
     int* pWestAntennaZ;
@@ -267,6 +288,7 @@ private:
     unsigned int centerAntennaFrontEndID;
     unsigned int centerAntennaFeedID;
     float centerAntennaDiameter;
+    unsigned int centerAntennaDelay;
     int centerAntennaX;
     int centerAntennaY;
     int centerAntennaZ;
@@ -297,6 +319,7 @@ private:
     double  delayForAntennaNorth(double t, struct QSoldatFile::SSRTsolarDataRecord* pEphem, int A1);
 
     tSyncDriverConfigure SyncDriverConfig;
+    QG7M* localOscillator;
 };
 
 #endif // MAINWINDOW_H
