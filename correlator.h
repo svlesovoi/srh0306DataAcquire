@@ -57,9 +57,19 @@ typedef struct sPkgSPI {
             volatile uint Error:1;    /* Ошибки */
             volatile uint Valid:1;    /* Пока не используется  */
             volatile uint Plrztn:1;   /* Информация по поляризации */
-            volatile uint Rsrvd:28;   /* Резерв */
+//            volatile uint Rsrvd:28;   /* Резерв */
+            volatile uint Rsrvd:12;   /* Резерв */
+            volatile uint Tbox:8;   /* Резерв */
+            volatile uint Tfpga:8;   /* Резерв */
         };
     } StsSpi;
+    union {
+      volatile uint U32;           /*  Состояние   */
+      struct {
+          volatile uint Link:16;    /* "Link" состояние связи с приёмником  */
+          volatile uint Rsrvd:16;
+      };
+    } State;
     volatile uint Mode;           /* Режим   */
     volatile uint TimePrescaler;  /* Предделитель времени  */
     volatile uint Time;           /* Время   */
@@ -308,6 +318,8 @@ typedef struct sPropertyFPGA {
     uint32_t Id;           /* Индификатор прошивки FPGA */
     uint32_t TimeStamp;    /* Временная метка    */
     uint32_t SzFifo;       /* Размер SPI Fifo буфера */
+    uint32_t IdHdl;        /* Индификатор прошивки HDL*/
+    uint32_t TimeStampHdl; /* Временная метка  HDL    */
 } tsPropertyFPGA;
 
 /*----------------------------------------------------------------------------*/

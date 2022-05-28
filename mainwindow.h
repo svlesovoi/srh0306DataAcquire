@@ -146,6 +146,7 @@ private:
     qint64 packetSize;
     unsigned char* dataPacket;
     int parsingState;
+    int firstPacketParsing;
     char correlatorRawBuffer[200000];
     int antennaDelay;
     bool metaDataReceived;

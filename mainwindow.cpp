@@ -523,8 +523,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     initAntennaArrayLayoutPlotter();
 
-//    ui->antennaPlotter->xAxis->setRange(0, numberOfFitsAmplitudes);
-    ui->antennaPlotter->xAxis->setRange(0, 208);
+    ui->antennaPlotter->xAxis->setRange(0, numberOfFitsAmplitudes);
+//    ui->antennaPlotter->xAxis->setRange(0, 208);
     QSharedPointer<QCPAxisTickerFixed> antennaTicker(new QCPAxisTickerFixed);
     antennaTicker->setTickStep(16);
     ui->antennaPlotter->xAxis->setTicker(antennaTicker);
@@ -692,7 +692,7 @@ void MainWindow::syncDriverStartStop(bool start){
          QApplication::quit();
     }
 }
-
+/*
 void MainWindow::on_correlatorClient_parse(){
     unsigned int lcpAmpColumnOffset;
     unsigned int rcpAmpColumnOffset;
@@ -885,6 +885,190 @@ void MainWindow::on_correlatorClient_parse(){
         }
     }
 }
+*/
+
+void MainWindow::on_correlatorClient_parse(){
+    unsigned int lcpAmpColumnOffset;
+    unsigned int rcpAmpColumnOffset;
+    unsigned int lcpVisColumnOffset;
+    unsigned int rcpVisColumnOffset;
+    unsigned int bytesInBuffer = 0;
+    unsigned int currentTime;
+    tPkg_Head* pCorrHead =  reinterpret_cast<tPkg_Head*>(correlatorRawBuffer);
+    tPkg_Dt* pCorrData = reinterpret_cast<tPkg_Dt*>(correlatorRawBuffer + sizeof(tPkg_Head));
+    tConfigure* pConf = reinterpret_cast<tConfigure*>(correlatorRawBuffer + sizeof(tPkg_Head));
+
+    if (firstPacketParsing){
+        bytesInBuffer = pCorrelatorClient->bytesAvailable();
+        if (bytesInBuffer = pCorrelatorClient->bytesAvailable() <= 200000)
+            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrHead), bytesInBuffer);           //read first buffer
+        else {
+            while (bytesInBuffer > 200000){
+                pCorrelatorClient->read(reinterpret_cast<char*>(pCorrHead), 200000);
+                bytesInBuffer -= 200000;
+            }
+            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrHead), bytesInBuffer);
+        }
+        firstPacketParsing = 0;
+    } else if (parsingState == 0){
+        if (static_cast<unsigned long>(pCorrelatorClient->bytesAvailable()) >= sizeof(tPkg_Head)){
+            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrHead), sizeof(tPkg_Head));           //read header
+            switch (pCorrHead->Rqst){
+                case eRqst_GetState:
+                    ui->logText->append("eRqst_GetState");
+                break;
+                case eRqst_SetStateProcessing:
+                    ui->logText->append("eRqst_SetStateProcessing");
+                break;
+                case eRqst_SetStateIdle:
+                    ui->logText->append("eRqst_SetStateIdle");
+                break;
+                case eRqst_SetEmulSin:
+                    ui->logText->append("eRqst_SetEmulSin");
+                break;
+                case eRqst_Rdr_SetCnfg:
+                    ui->logText->append("eRqst_Rdr_SetCnfg");
+                break;
+                case eRqst_Rdr_SetRgs32:
+                    ui->logText->append("eRqst_Rdr_SetRgs32");
+                break;
+                case eRqst_SetTime:
+                    ui->logText->append("eRqst_SetTime");
+                break;
+                case eRqst_GetPropertyFPGA:
+                    parsingState = 1;//there is payload
+                break;
+                case eRqst_GetProperty:
+                    parsingState = 1;//there is payload
+                break;
+                case eRqst_Rdr_Strm_DtOut:
+                    parsingState = 2;//visibility data
+                break;
+            }
+        }
+    } else if (parsingState == 1){
+        if (pCorrelatorClient->bytesAvailable() >= pCorrHead->DtSz){
+            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrData), pCorrHead->DtSz);         //read data
+            parsingState = 0;
+            switch (pCorrHead->Rqst){
+                case eRqst_GetProperty:
+                    ui->logText->append("eRqst_GetProperty");
+                    ui->logText->append(QString(reinterpret_cast<const char*>(pCorrData->pU8)));
+                break;
+                case eRqst_GetPropertyFPGA:
+                    ui->logText->append("eRqst_GetPropertyFPGA");
+                    ui->logText->append(QString(reinterpret_cast<const char*>(pCorrData->pU8)));
+                break;
+            }
+        }
+    } else if (parsingState == 2){//read visibility data
+        if (pCorrelatorClient->bytesAvailable() >= pCorrHead->DtSz){
+            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrData), pCorrHead->DtSz);         //read data
+            if(pCorrData->Blck.DtBlck.DtSz > 0 && pCorrData->Blck.DtBlck.DtSz <= dHlgrph_PkgBlckDtMaxSz) { //visibility data
+                if (pCorrData->Blck.DtBlck.Offset == 0){
+                    std::memcpy(dataPacket + pCorrData->Blck.DtBlck.Offset, pCorrData->Blck.pU8, pCorrData->Blck.DtBlck.DtSz);
+                    currentPolarization = pCorrData->Blck.Cfg.InfoSpiDrv.StsSpi.Plrztn;
+                    if (currentPolarization == showPolarization && currentFrequency == showFrequency){
+                        ui->logText->append("Tbox " + QString::number(pCorrData->Blck.Cfg.Temprtr));
+                        ui->logText->append("Tfpga " + QString::number(pCorrData->Blck.Cfg.InfoSpiDrv.StsSpi.Tfpga));
+                    }
+                    currentFrequency = 0;
+                    currentTime = pCorrData->Blck.Cfg.TimeDMA;
+                    for (unsigned int f = 0;f < frequencyListSize;++f)
+                        if (pCorrData->Blck.Cfg.InfoSpiDrv.Frequency == frequencyList[f]){
+                                currentFrequency = f;
+                        }
+                } else
+                    std::memcpy(dataPacket + pCorrData->Blck.DtBlck.Offset, pCorrData->Blck.pU8, pCorrData->Blck.DtBlck.DtSz);
+
+                if (pCorrData->Blck.DtBlck.Offset + pCorrData->Blck.DtBlck.DtSz == pCorrData->Blck.DtBlck.FullDtSz){
+                    ++packetNumber;
+                    if (packetNumber > plotterXScale)
+                        ui->plotter->xAxis->setRange(packetNumber - plotterXScale + plotterXOffset, packetNumber + plotterXOffset);
+
+                    int32_t* pAmpl = reinterpret_cast<int32_t*>(dataPacket + sizeof(tConfigure)) + 44096;
+                    int64_t* pAnt0 = reinterpret_cast<int64_t*>(pAmpl);
+                    if (currentPolarization == showPolarization && currentFrequency == showFrequency){
+                        ui->currentFrequencySpinBox->setPrefix(QString::number(frequencyList[currentFrequency]) + " ");
+                        ui->plotter->graph(0)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaA]] * ampScale);
+                        ui->plotter->graph(1)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaB]] * ampScale);
+                        unsigned int visibilityIndex = visibilityIndexAsHV(pAntennaReceiver[showAntennaA]*16 + pAntennaReceiverChannel[showAntennaA],
+                                                                           pAntennaReceiver[showAntennaB]*16 + pAntennaReceiverChannel[showAntennaB]);
+                        if (visibilityIndex < numberOfVisibilities){
+                            ui->plotter->graph(2)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket  + sizeof(tConfigure)) + visibilityIndex*2)*visScale);
+                            ui->plotter->graph(3)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket  + sizeof(tConfigure)) + visibilityIndex*2 + 1)*visScale);
+                        }
+                        QVector<double> antennaX(numberOfFitsAmplitudes);
+                        QVector<double> antennaY(numberOfFitsAmplitudes);
+                        QVector<double> antennaAXmarker(1);
+                        QVector<double> antennaAYmarker(1);
+                        QVector<double> antennaBXmarker(1);
+                        QVector<double> antennaBYmarker(1);
+                        for(unsigned int ant = 0;ant < numberOfFitsAmplitudes;++ant){
+                          antennaX[ant] = ant;
+                          antennaY[ant] = static_cast<double>(pAnt0[pAmpIndToCorrPacketInd[ant]] * ampScale);
+                          if (ant == showAntennaA){
+                              antennaAXmarker[0] = antennaX[ant];
+                              antennaAYmarker[0] = antennaY[ant];
+                          }
+                          if (ant == showAntennaB){
+                              antennaBXmarker[0] = antennaX[ant];
+                              antennaBYmarker[0] = antennaY[ant];
+                          }
+                        }
+                        ui->antennaPlotter->graph(0)->setData(antennaX, antennaY, numberOfFitsAmplitudes);
+                        ui->antennaPlotter->graph(1)->setData(antennaAXmarker, antennaAYmarker, 1);
+                        ui->antennaPlotter->graph(2)->setData(antennaBXmarker, antennaBYmarker, 1);
+                        replotAntennaMarkers();
+                        ui->antennaPlotter->replot();
+                    } else {
+                    }
+                    ui->plotter->replot();
+                    lcpAmpColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfFitsAmplitudes;
+                    rcpAmpColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfFitsAmplitudes;
+                    lcpVisColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfFitsVisibilities;
+                    rcpVisColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfFitsVisibilities;
+
+                    QTime curTime = QTime::currentTime();
+                    int64_t* pAmplitude = pAnt0;
+                    int64_t* pVisibility = reinterpret_cast<int64_t*>(dataPacket + sizeof(tConfigure));
+                    if (currentPolarization == 0 && lcpFullPacketNumber < fullPacketsInFits){
+                        freqColumn[currentFrequency] = frequencyList[currentFrequency];
+                        timeColumn[currentFrequency][lcpFullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
+                        for(unsigned int lcpAmp = 0;lcpAmp < numberOfFitsAmplitudes;++lcpAmp)
+                            lcpAmpColumn[currentFrequency][lcpAmpColumnOffset + pAmpIndToFitsInd[lcpAmp]] = pAmplitude[pAmpIndToCorrPacketInd[lcpAmp]];
+                        for(unsigned int lcpVis = 0;lcpVis < numberOfFitsVisibilities;++lcpVis){
+                            int64_t lcpInt64 = pVisibility[pVisIndToCorrPacketInd[lcpVis]];
+                            float realLcpInt64 = *(int32_t*)&lcpInt64;
+                            float imagLcpInt64 = *((int32_t*)&lcpInt64 + 1);
+                            lcpVisColumn[currentFrequency][lcpVisColumnOffset + lcpVis] = complex<float>(realLcpInt64,  imagLcpInt64);
+                        }
+                        ++lcpFullPacketNumber;
+                    } else if (rcpFullPacketNumber < fullPacketsInFits){
+                        for(unsigned int rcpAmp = 0;rcpAmp < numberOfFitsAmplitudes;++rcpAmp)
+                            rcpAmpColumn[currentFrequency][rcpAmpColumnOffset + pAmpIndToFitsInd[rcpAmp]] = pAmplitude[pAmpIndToCorrPacketInd[rcpAmp]];
+                        for(unsigned int rcpVis = 0;rcpVis < numberOfFitsVisibilities;++rcpVis){
+                            int64_t rcpInt64 = pVisibility[pVisIndToCorrPacketInd[rcpVis]];
+                            float realRcpInt64 = *(int32_t*)&rcpInt64;
+                            float imagRcpInt64 = *((int32_t*)&rcpInt64 + 1);
+                            rcpVisColumn[currentFrequency][rcpVisColumnOffset + rcpVis] = complex<float>(realRcpInt64, imagRcpInt64);
+                        }
+                        ++rcpFullPacketNumber;
+                    }
+                    if (lcpFullPacketNumber == fullPacketsInFits && rcpFullPacketNumber == fullPacketsInFits){
+                        writeCurrentFits();
+                        ++fitsNumber;
+                        currentFrequency = 0;
+                        lcpFullPacketNumber = 0;
+                        rcpFullPacketNumber = 0;
+                    }
+                }//full packet read
+            }//visibility data
+            parsingState = 0;
+        }
+    }
+}
+
 
 void MainWindow::addKey2FitsHeader(QString key, QString value, QString comment, FITS* pFits){
     pFits->pHDU().addKey(key.toStdString(),value.toStdString(),comment.toStdString());
@@ -900,8 +1084,7 @@ void MainWindow::writeCurrentFits(){
     string antNameHduSign("SRH_ANT_NAMES");
     string antHduSign("SRH_ANT");
     string hduSign("SRH_DATA");
-//    QString qFitsName = "currentData/srh_" + QDateTime::currentDateTime().toString("yyyyMMddThhmmss") + ".fit";
-    QString qFitsName = "currentData/SRH36/" + QDateTime::currentDateTime().toString("yyyyMMdd") + "/srh_" + QDateTime::currentDateTime().toString("yyyyMMddThhmmss") + ".fit";
+    QString qFitsName = "currentData/SRH36/" + QDateTime::currentDateTime().toString("yyyyMMdd") + "/srh_0306_" + QDateTime::currentDateTime().toString("yyyyMMddThhmmss") + ".fit";
     const std::string fitsName = qFitsName.toStdString();
     std::vector<string> antNameColName(2,"");
     std::vector<string> antNameColForm(2,"");
@@ -1261,8 +1444,12 @@ void MainWindow::initCorrelator(bool acquire){
     setRgPacket.H.Magic = 0x05;
 
     if(acquire){
+        firstPacketParsing = 1;
         parsingState = 0;
         metaDataReceived = false;
+
+        if (!QDir("currentData/SRH36/" + QDateTime::currentDateTime().toString("yyyyMMdd")).exists())
+            QDir().mkdir("currentData/SRH36/" + QDateTime::currentDateTime().toString("yyyyMMdd"));
 
         initDigitalReceivers();
         setCorrelatorTime();
@@ -1613,11 +1800,12 @@ void MainWindow::on_calcAllDelaysButton_clicked(){
 
 void MainWindow::on_showNWEEButton_toggled(bool checked){
     showNWEE = checked;
+/*
     if (showNWEE)
         ui->antennaPlotter->xAxis->setRange(0,amp0306Number);
     else
         ui->antennaPlotter->xAxis->setRange(0,208);
-    ui->antennaPlotter->replot();
+    ui->antennaPlotter->replot();*/
 }
 
 void MainWindow::on_showPolarizationButton_toggled(bool checked){
