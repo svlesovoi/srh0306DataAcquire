@@ -156,6 +156,8 @@ enum eSyncDriverRqst {
 
     /* Получить конфигурацию */
     eSyncDriverRqst_Rdr_GetCnfg,
+    eSyncDriverRqst_Rdr_SetCnfgNew,
+    eSyncDriverRqst_Rdr_GetCnfgNew,
     eSyncDriverRqst_Rdr_End,
 
     /* Потоковые команды */
@@ -421,11 +423,25 @@ typedef struct SyncDriverConfigure {
     uint32_t Cntrl;
 } tSyncDriverConfigure;
 
+typedef enum SyncDriverFrqRange {
+    SyncDriverFrqRange_3_6,
+    SyncDriverFrqRange_6_12,
+    SyncDriverFrqRange_12_24,
+    SyncDriverFrqRange_End
+} tSyncDriverFrqRange;
+
+typedef struct SyncDriverConfigureNew {
+   tSyncDriverFrqRange FrqRange;
+   tSyncDriverConfigure Configure;
+} tSyncDriverConfigureNew;
+
 typedef union uSyncDriverPkg_Dt {
     /* Не блочные данные */
     union {
         uint8_t pU8[dHlgrphSS_PkgDtMaxSz];
         tSyncDriverConfigure Cfg;
+        tSyncDriverConfigureNew CfgNew;
+        tSyncDriverFrqRange FrqRange;
         struct { tState Stt; tError Err; };
     };
     /* Блочные данные */
@@ -434,6 +450,8 @@ typedef union uSyncDriverPkg_Dt {
         union {
             uint8_t pU8[dHlgrphSS_PkgBlckDtMaxSz];
             tSyncDriverConfigure Cfg;
+            tSyncDriverConfigureNew CfgNew;
+            tSyncDriverFrqRange FrqRange;
         };
     } Blck;
 } tSyncDriverPkg_Dt;

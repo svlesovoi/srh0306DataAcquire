@@ -43,6 +43,8 @@ MainWindow::MainWindow(QWidget *parent) :
     dataDuration = settings.value("receiver/dataDuration", 2000000).toUInt();
     internalSync = settings.value("receiver/internalSync", 0).toBool();
     oneBitCorrelation = settings.value("receiver/oneBitCorrelation", 0).toBool();
+    quantizerStep = settings.value("receiver/quantizerStep",1000).toUInt();
+    quantizerType = settings.value("receiver/quantizerType",0).toBool();
     delayTracking = settings.value("receiver/delayTracking", 1).toBool();
     fringeStopping = settings.value("receiver/fringeStopping", 1).toBool();
     autoStart = settings.value("receiver/autoStart", 1).toBool();
@@ -456,6 +458,8 @@ MainWindow::MainWindow(QWidget *parent) :
         fileLogIndexes.open(QIODevice::WriteOnly | QIODevice::Text);
         QTextStream out(&fileLogIndexes);
         out << "westAntennaNumber " << westAntennaNumber << " eastAntennaNumber " << eastAntennaNumber << " northAntennaNumber " << northAntennaNumber << "\n";
+        out << "quantizerStep " << quantizerStep << " quantizerType " << quantizerType << " oneBitCorrelation " << oneBitCorrelation << "\n";
+
         out << "northEastWestVisNumber " << northEastWestVisNumber << " northVisNumber " << northVisNumber << " westVisNumber " << westVisNumber << " eastWestVisNumber " << eastWestVisNumber << "\n";
         for (unsigned int i = 0;i < amp0306Number;++i)
                 out << i + 1 << " " << pAmpAntennaName[i] << " " << pAntennaReceiver[i] << " " << pAntennaReceiverChannel[i] << " " << pAmpIndToCorrPacketInd[i] << "\n";
@@ -561,6 +565,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->showNWEEButton->setChecked(showNWEE);
     ui->delayTrackingButton->setChecked(delayTracking);
     ui->fringeStoppingButton->setChecked(fringeStopping);
+    ui->SyncDriverSetConfigButton->hide();
 
 //    localOscillator = new QG7M(localOscillatorIP);
 
@@ -622,13 +627,13 @@ void MainWindow::on_SyncDriverConnect_clicked(bool checked){
         pSyncDriverClient->connectToHost(SyncDriverIP, SyncDriverPort);
     else{
         syncDriverStartStop(false);
-        pSyncDriverClient->disconnectFromHost();
+        QTimer::singleShot(3000,this,&MainWindow::disconnectSyncDriver);
     }
 }
 
 void MainWindow::on_SyncDriverGetConfigButton_clicked(){
     static tSyncDriverPkg SyncDriverPacket;
-    SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_GetCnfg;
+    SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_GetCnfgNew;
     SyncDriverPacket.H.isPacked = 0;
     SyncDriverPacket.H.HeadExtTp = 0x00;
     SyncDriverPacket.H.Magic = 0x05;
@@ -636,6 +641,7 @@ void MainWindow::on_SyncDriverGetConfigButton_clicked(){
     pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
 }
 
+/*
 void MainWindow::startSyncDriver(){
     ui->SyncDriverConnect->setChecked(true);
     ui->SyncDriverSetConfigButton->setChecked(true);
@@ -649,11 +655,38 @@ void MainWindow::stopSyncDriver(){
     ui->SyncDriverSetConfigButton->setChecked(false);
     syncDriverStartStop(false);
 }
+*/
+
+void MainWindow::startSyncDriver(){
+    ui->SyncDriverConnect->setChecked(true);
+    ui->SyncDriverSetConfigButton->setChecked(true);
+    syncDriverStartStop(true);
+}
+
+void MainWindow::stopSyncDriver(){
+    ui->SyncDriverConnect->setChecked(false);
+    ui->SyncDriverSetConfigButton->setChecked(false);
+    syncDriverStartStop(false);
+}
+
+/*
+void MainWindow::on_SyncDriverClient_connected(){
+    ui->logText->append(QString("SyncDriver connected"));
+    if (autoStart)
+        QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
+}
+*/
+
+void MainWindow::disconnectSyncDriver(){
+    pSyncDriverClient->disconnectFromHost();
+}
 
 void MainWindow::on_SyncDriverClient_connected(){
     ui->logText->append(QString("SyncDriver connected"));
     if (autoStart)
         QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
+    else
+        QTimer::singleShot(1000,this,&MainWindow::stopSyncDriver);
 }
 
 void MainWindow::on_SyncDriverClient_disconnected(){
@@ -663,7 +696,7 @@ void MainWindow::on_SyncDriverClient_disconnected(){
 void MainWindow::on_SyncDriverSetConfigButton_clicked(bool checked){
     syncDriverStartStop(checked);
 }
-
+/*
 void MainWindow::syncDriverStartStop(bool start){
     static tSyncDriverPkg SyncDriverPacket;
     SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_SetCnfg;
@@ -692,6 +725,47 @@ void MainWindow::syncDriverStartStop(bool start){
          QApplication::quit();
     }
 }
+*/
+
+void MainWindow::syncDriverStartStop(bool start){
+    static tSyncDriverPkg SyncDriverPacket;
+    SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_SetCnfgNew;
+    SyncDriverPacket.H.isPacked = 0;
+    SyncDriverPacket.H.HeadExtTp = 0x00;
+    SyncDriverPacket.H.Magic = 0x05;
+    SyncDriverPacket.H.DtSz = 40;//sizeof(SyncDriverConfig);
+    std::memset(SyncDriverPacket.D.pU8,0,dHlgrphSS_PkgDtMaxSz);
+    SyncDriverPacket.D.CfgNew.FrqRange = SyncDriverFrqRange_3_6;
+    SyncDriverPacket.D.CfgNew.Configure.FSetDuration = SyncDriverConfig.FSetDuration;
+    SyncDriverPacket.D.CfgNew.Configure.PolarToggle = SyncDriverConfig.PolarToggle;
+    SyncDriverPacket.D.CfgNew.Configure.PolarSet = SyncDriverConfig.PolarSet;
+    SyncDriverPacket.D.CfgNew.Configure.HiTimeDuration = SyncDriverConfig.HiTimeDuration;
+    SyncDriverPacket.D.CfgNew.Configure.LowTimeDuration = SyncDriverConfig.LowTimeDuration;
+    SyncDriverPacket.D.CfgNew.Configure.NBand = SyncDriverConfig.NBand;
+    SyncDriverPacket.D.CfgNew.Configure.NCycle = SyncDriverConfig.NCycle;
+    SyncDriverPacket.D.CfgNew.Configure.NFSet = SyncDriverConfig.NFSet;
+    if (start)
+        SyncDriverPacket.D.CfgNew.Configure.Cntrl = 0x11;
+    else
+        SyncDriverPacket.D.CfgNew.Configure.Cntrl = 0x00;
+
+    ui->logText->append("size " + QString::number(SyncDriverPacket.H.DtSz));
+    ui->logText->append("FrqRange " + QString::number(SyncDriverPacket.D.CfgNew.FrqRange));
+    ui->logText->append("FSetDuration " + QString::number(SyncDriverPacket.D.CfgNew.Configure.FSetDuration));
+    ui->logText->append("PolarToggle " + QString::number(SyncDriverPacket.D.CfgNew.Configure.PolarToggle));
+    ui->logText->append("PolarSet " + QString::number(SyncDriverPacket.D.CfgNew.Configure.PolarSet));
+    ui->logText->append("HiTimeDuration " + QString::number(SyncDriverPacket.D.CfgNew.Configure.HiTimeDuration));
+    ui->logText->append("LowTimeDuration " + QString::number(SyncDriverPacket.D.CfgNew.Configure.LowTimeDuration));
+    ui->logText->append("NBand " + QString::number(SyncDriverPacket.D.CfgNew.Configure.NBand));
+    ui->logText->append("NCycle " + QString::number(SyncDriverPacket.D.CfgNew.Configure.NCycle));
+    ui->logText->append("NFSet " + QString::number(SyncDriverPacket.D.CfgNew.Configure.NFSet));
+    ui->logText->append("Cntrl " + QString::number(SyncDriverPacket.D.CfgNew.Configure.Cntrl,16));
+
+
+    pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
+    QTimer::singleShot(3000,this,&MainWindow::disconnectSyncDriver);
+}
+
 /*
 void MainWindow::on_correlatorClient_parse(){
     unsigned int lcpAmpColumnOffset;
@@ -1268,7 +1342,7 @@ void MainWindow::initDigitalReceivers(){
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
     }
     setBitWindowPosition(10);
-//    setReceiverBitWindowPosition(8,7);
+    on_oneBitCorrelationButton_clicked(false);
 }
 
 void MainWindow::setBitWindowPosition(unsigned int bitWindowPosition){
@@ -1588,7 +1662,7 @@ void MainWindow::on_oneBitCorrelationButton_clicked(bool checked){
     if (oneBitCorrelation)
         setRgPacket.D.Rg32.Rg[4] = 0;//
     else
-        setRgPacket.D.Rg32.Rg[4] = quantizerStep | (qunatizerZeroLevel ? 0x80000000 : 0);//
+        setRgPacket.D.Rg32.Rg[4] = quantizerStep | (quantizerType ? 0x80000000 : 0);//
 
     setRgPacket.D.Rg32.Count = 5;
     setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
@@ -1606,7 +1680,7 @@ void MainWindow::on_quantizerSpinBox_valueChanged(int newStep){
 }
 
 void MainWindow::on_pushButton_clicked(bool checked){
-    qunatizerZeroLevel = !checked;
+    quantizerType = !checked;
 }
 
 void MainWindow::on_currentAntennaASpinBox_valueChanged(int newAntA){
