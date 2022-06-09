@@ -214,6 +214,7 @@ MainWindow::MainWindow(QWidget *parent) :
     pVisIndToFitsInd = new unsigned int[vis0306Number];
     pVisibilitySign = new int[vis0306Number];
     for (unsigned sig = 0;sig < vis0306Number;++sig) pVisibilitySign[sig] = 1;
+    pAmpCIndToCorrPacketInd = new unsigned int[amp0306Number];
     pVis0306AntennaNameA = new QString[vis0306Number];
     pVis0306AntennaNameB = new QString[vis0306Number];
 
@@ -250,13 +251,27 @@ MainWindow::MainWindow(QWidget *parent) :
             unsigned int V = pEastAntennaReceiver[j]*16 + pEastAntennaChannel[j];
             pVisIndToCorrPacketInd[visInd] = visibilityIndexAsHV(H, V);
             pVisibilitySign[visInd] = H > V ? 1 : -1;
-//            pVis0306AntennaNameA[visInd] = pNorthAntennaName[i];
-//            pVis0306AntennaNameB[visInd] = pEastAntennaName[j];
             pVis0306AntennaNameB[visInd] = pNorthAntennaName[i];
             pVis0306AntennaNameA[visInd] = pEastAntennaName[j];
         }
     }
 
+//ampC vis
+    for (unsigned int i = 0;i < northAntennaNumber;++i){
+        unsigned int H = pNorthAntennaReceiver[i]*16 + pNorthAntennaChannel[i];
+        pAmpCIndToCorrPacketInd[i] = visibilityIndexAsHV(H, H);
+    }
+    for (unsigned int i = 0;i < westAntennaNumber;++i){
+        unsigned int H = pWestAntennaReceiver[i]*16 + pWestAntennaChannel[i];
+        pAmpCIndToCorrPacketInd[i + northAntennaNumber] = visibilityIndexAsHV(H, H);
+    }
+
+    pAmpCIndToCorrPacketInd[i + northAntennaNumber + westAntennaNumber] = visibilityIndexAsHV(centerAntennaReceiver*16 + centerAntennaChannel, centerAntennaReceiver*16 + centerAntennaChannel);
+
+    for (unsigned int i = 0;i < eastAntennaNumber;++i){
+        unsigned int H = pEastAntennaReceiver[i]*16 + pEastAntennaChannel[i];
+        pAmpCIndToCorrPacketInd[i + northAntennaNumber + westAntennaNumber + 1] = visibilityIndexAsHV(H, H);
+    }
 //northNorth vis
     for (unsigned int i = 1, visInd = northEastWestVisNumber;i < northAntennaNumber;++i){
         for (unsigned int j = 0;j < northAntennaNumber - i;++j){
@@ -388,11 +403,14 @@ MainWindow::MainWindow(QWidget *parent) :
     std::valarray<double> timeArr(fullPacketsInFits / frequencyListSize);
     std::valarray<int64_t> ampArr(fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);
     std::valarray<complex<float> > visArr(fullPacketsInFits / frequencyListSize * numberOfFitsVisibilities);
+    std::valarray<float> ampCArr(fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);
     timeColumn.assign(frequencyListSize, timeArr);
     lcpAmpColumn.assign(frequencyListSize, ampArr);
     rcpAmpColumn.assign(frequencyListSize, ampArr);
     lcpVisColumn.assign(frequencyListSize, visArr);
     rcpVisColumn.assign(frequencyListSize, visArr);
+    lcpAmpCColumn.assign(frequencyListSize, ampCArr);
+    rcpAmpCColumn.assign(frequencyListSize, ampCArr);
 
     antIndexColumn.resize(amp0306Number);
     antNameColumn.resize(amp0306Number);
@@ -480,6 +498,14 @@ MainWindow::MainWindow(QWidget *parent) :
                 out << rec + 1 << " " << chan + 1 << " " << " " <<  pAntennaX[pReceiverChannelToInd[posInd]] << " " << pAntennaY[pReceiverChannelToInd[posInd]] << " "
                     << pAntennaDelay[posInd] << "\n";
             }
+
+        out << "\ampCvis" << "\n";
+        for (unsigned int i = 0;i < amp0306Number;++i)
+                out << i << " "
+                    << pVis0306AntennaNameA[i] << " "
+                    << pVis0306AntennaNameA[i] << " "
+                    << pAmpCIndToCorrPacketInd[i] << "\n";
+
         out << "\nvis" << "\n";
         for (unsigned int i = 0;i < vis0306Number;++i)
                 out << i << " "
@@ -567,18 +593,16 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->fringeStoppingButton->setChecked(fringeStopping);
     ui->SyncDriverSetConfigButton->hide();
 
-//    localOscillator = new QG7M(localOscillatorIP);
-
-    if (autoStart)
+    if (autoStart){
+        ui->logText->append("Connecting to the correlator... ");
         pCorrelatorClient->connectToHost(correlatorIP, static_cast<unsigned short>(correlatorPort));
+    }
     if (autoStop){
         QDateTime startTime = QDateTime::currentDateTime();
         QDateTime stopTime = startTime;
         stopTime.setTime(QTime(autoStopHour, autoStopMinute));
         QTimer::singleShot(startTime.msecsTo(stopTime),this,&MainWindow::stopSyncDriver);
     }
-
-
 }
 
 MainWindow::~MainWindow(){
@@ -1109,8 +1133,12 @@ void MainWindow::on_correlatorClient_parse(){
                     if (currentPolarization == 0 && lcpFullPacketNumber < fullPacketsInFits){
                         freqColumn[currentFrequency] = frequencyList[currentFrequency];
                         timeColumn[currentFrequency][lcpFullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
-                        for(unsigned int lcpAmp = 0;lcpAmp < numberOfFitsAmplitudes;++lcpAmp)
+                        for(unsigned int lcpAmp = 0;lcpAmp < numberOfFitsAmplitudes;++lcpAmp){
                             lcpAmpColumn[currentFrequency][lcpAmpColumnOffset + pAmpIndToFitsInd[lcpAmp]] = pAmplitude[pAmpIndToCorrPacketInd[lcpAmp]];
+                            int64_t lcpInt64 = pVisibility[pAmpCIndToCorrPacketInd[lcpAmp]];
+                            float realLcpInt64 = *(int32_t*)&lcpInt64;
+                            lcpAmpCColumn[currentFrequency][lcpAmpColumnOffset + pAmpIndToFitsInd[lcpAmp]] = realLcpInt64;
+                        }
                         for(unsigned int lcpVis = 0;lcpVis < numberOfFitsVisibilities;++lcpVis){
                             int64_t lcpInt64 = pVisibility[pVisIndToCorrPacketInd[lcpVis]];
                             float realLcpInt64 = *(int32_t*)&lcpInt64;
@@ -1119,8 +1147,12 @@ void MainWindow::on_correlatorClient_parse(){
                         }
                         ++lcpFullPacketNumber;
                     } else if (rcpFullPacketNumber < fullPacketsInFits){
-                        for(unsigned int rcpAmp = 0;rcpAmp < numberOfFitsAmplitudes;++rcpAmp)
+                        for(unsigned int rcpAmp = 0;rcpAmp < numberOfFitsAmplitudes;++rcpAmp){
                             rcpAmpColumn[currentFrequency][rcpAmpColumnOffset + pAmpIndToFitsInd[rcpAmp]] = pAmplitude[pAmpIndToCorrPacketInd[rcpAmp]];
+                            int64_t rcpInt64 = pVisibility[pAmpCIndToCorrPacketInd[rcpAmp]];
+                            float realRcpInt64 = *(int32_t*)&rcpInt64;
+                            rcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + pAmpIndToFitsInd[rcpAmp]] = realRcpInt64;
+                        }
                         for(unsigned int rcpVis = 0;rcpVis < numberOfFitsVisibilities;++rcpVis){
                             int64_t rcpInt64 = pVisibility[pVisIndToCorrPacketInd[rcpVis]];
                             float realRcpInt64 = *(int32_t*)&rcpInt64;
@@ -1172,9 +1204,9 @@ void MainWindow::writeCurrentFits(){
     std::vector<string> antPairColForm(2,"");
     std::vector<string> antPairColUnit(2,"");
 
-    std::vector<string> colName(6,"");
-    std::vector<string> colForm(6,"");
-    std::vector<string> colUnit(6,"");
+    std::vector<string> colName(8,"");
+    std::vector<string> colForm(8,"");
+    std::vector<string> colUnit(8,"");
 
     QString columnFormat;
 
@@ -1232,13 +1264,17 @@ void MainWindow::writeCurrentFits(){
     colName[3] = "amp_rcp";
     colName[4] = "vis_lcp";
     colName[5] = "vis_rcp";
+    colName[6] = "amp_c_lcp";
+    colName[7] = "amp_c_rcp";
 
     colForm[0] = "1J";
     columnFormat.sprintf("%dD", fullPacketsInFits / frequencyListSize);                             colForm[1] = columnFormat.toStdString();
-    columnFormat.sprintf("%dK", fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);  colForm[2] = columnFormat.toStdString();
-    columnFormat.sprintf("%dK", fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);  colForm[3] = columnFormat.toStdString();
+    columnFormat.sprintf("%dK", fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);    colForm[2] = columnFormat.toStdString();
+    columnFormat.sprintf("%dK", fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);    colForm[3] = columnFormat.toStdString();
     columnFormat.sprintf("%dC", fullPacketsInFits / frequencyListSize * numberOfFitsVisibilities);  colForm[4] = columnFormat.toStdString();
     columnFormat.sprintf("%dC", fullPacketsInFits / frequencyListSize * numberOfFitsVisibilities);  colForm[5] = columnFormat.toStdString();
+    columnFormat.sprintf("%dK", fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);    colForm[6] = columnFormat.toStdString();
+    columnFormat.sprintf("%dK", fullPacketsInFits / frequencyListSize * numberOfFitsAmplitudes);    colForm[7] = columnFormat.toStdString();
 
     colUnit[0] = "Hz";
     colUnit[1] = "second";
@@ -1246,64 +1282,79 @@ void MainWindow::writeCurrentFits(){
     colUnit[3] = "watt";
     colUnit[4] = "correlation";
     colUnit[5] = "correlation";
+    colUnit[6] = "watt";
+    colUnit[7] = "watt";
 
-    FITS fits2save(fitsName, Write);
-    addKey2FitsHeader(QString("ORIGIN"),QString("ISTP"),QString("Institue of Solar-Terrestrial Physics"),&fits2save);
-    addKey2FitsHeader(QString("TELESCOP"),QString("SSRT"),QString("Siberian Solar Radio Telescope"),&fits2save);
-    addKey2FitsHeader(QString("INSTRUME"),QString("SRH0306"),QString("3-6 GHz Siberian Radioheliograph"),&fits2save);
-    addKey2FitsHeader(QString("OBJECT"),QString("The Sun"),QString(""),&fits2save);
-    addKey2FitsHeader(QString("OBS-LAT"),QString("51.759"),QString("Observatory latitude N51.759d"),&fits2save);
-    addKey2FitsHeader(QString("OBS-LONG"),QString("102.217"),QString("Observatory longitude E102.217d"),&fits2save);
-    addKey2FitsHeader(QString("OBS-ALT"),QString("799"),QString("Observatory altitude 799m asl"),&fits2save);
-    addKey2FitsHeader(QString("FR_CHAN"),QString("10"),QString("Frequency channel width 10MHz"),&fits2save);
-    addKey2FitsHeader(QString("VIS_MAX"),QString::number(dataDuration*maxVisValue),QString("Visibility scale V /= VIS_MAX"),&fits2save);
+    try {
+        FITS fits2save(fitsName, Write);
+        addKey2FitsHeader(QString("ORIGIN"),QString("ISTP"),QString("Institue of Solar-Terrestrial Physics"),&fits2save);
+        addKey2FitsHeader(QString("TELESCOP"),QString("SSRT"),QString("Siberian Solar Radio Telescope"),&fits2save);
+        addKey2FitsHeader(QString("INSTRUME"),QString("SRH0306"),QString("3-6 GHz Siberian Radioheliograph"),&fits2save);
+        addKey2FitsHeader(QString("OBJECT"),QString("The Sun"),QString(""),&fits2save);
+        addKey2FitsHeader(QString("OBS-LAT"),QString("51.759"),QString("Observatory latitude N51.759d"),&fits2save);
+        addKey2FitsHeader(QString("OBS-LONG"),QString("102.217"),QString("Observatory longitude E102.217d"),&fits2save);
+        addKey2FitsHeader(QString("OBS-ALT"),QString("799"),QString("Observatory altitude 799m asl"),&fits2save);
+        addKey2FitsHeader(QString("FR_CHAN"),QString("10"),QString("Frequency channel width 10MHz"),&fits2save);
+        addKey2FitsHeader(QString("VIS_MAX"),QString::number(dataDuration*maxVisValue),QString("Visibility scale V /= VIS_MAX"),&fits2save);
+        addKey2FitsHeader(QString("Q_STEP"),QString::number(quantizerStep),QString("Quantizer step size"),&fits2save);
+        addKey2FitsHeader(QString("Q_TYPE"),QString::number(quantizerType),QString("Quantizer type 0,1 - odd,even number of levels"),&fits2save);
+        if (quantizerStep == 0)
+            addKey2FitsHeader(QString("Q_LEVELS"),QString::number(3),QString("Quantizer levels number"),&fits2save);
+        else if (quantizerType == 0)
+            addKey2FitsHeader(QString("Q_LEVELS"),QString::number(15),QString("Quantizer levels number"),&fits2save);
+        else
+            addKey2FitsHeader(QString("Q_LEVELS"),QString::number(14),QString("Quantizer levels number"),&fits2save);
+        QDate currentDate = QDate::currentDate();
+        addKey2FitsHeader(QString("DATE-OBS"),currentDate.toString(Qt::ISODate),QString(""),&fits2save);
+        QTime currentTime = QTime::currentTime();
+        addKey2FitsHeader(QString("TIME-OBS"),currentTime.toString(QString("HH:mm:ss")),QString(""),&fits2save);
 
-    QDate currentDate = QDate::currentDate();
-    addKey2FitsHeader(QString("DATE-OBS"),currentDate.toString(Qt::ISODate),QString(""),&fits2save);
-    QTime currentTime = QTime::currentTime();
-    addKey2FitsHeader(QString("TIME-OBS"),currentTime.toString(QString("HH:mm:ss")),QString(""),&fits2save);
+        try{
+            Table* pTable = fits2save.addTable(hduSign, rows, colName, colForm, colUnit);
+            pTable->column(colName[0]).write(freqColumn, 1);
+            pTable->column(colName[1]).writeArrays(timeColumn, 1);
+            pTable->column(colName[2]).writeArrays(lcpAmpColumn, 1);
+            pTable->column(colName[3]).writeArrays(rcpAmpColumn, 1);
+            pTable->column(colName[4]).writeArrays(lcpVisColumn, 1);
+            pTable->column(colName[5]).writeArrays(rcpVisColumn, 1);
+            pTable->column(colName[6]).writeArrays(lcpAmpCColumn, 1);
+            pTable->column(colName[7]).writeArrays(rcpAmpCColumn, 1);
+        } catch (FITS::CantCreate){
+            ui->logText->append("FITS data table error");
+        }
 
-    try{
-        Table* pTable = fits2save.addTable(hduSign, rows, colName, colForm, colUnit);
-        pTable->column(colName[0]).write(freqColumn, 1);
-        pTable->column(colName[1]).writeArrays(timeColumn, 1);
-        pTable->column(colName[2]).writeArrays(lcpAmpColumn, 1);
-        pTable->column(colName[3]).writeArrays(rcpAmpColumn, 1);
-        pTable->column(colName[4]).writeArrays(lcpVisColumn, 1);
-        pTable->column(colName[5]).writeArrays(rcpVisColumn, 1);
-    } catch (FITS::CantCreate){
-        ui->logText->append("FITS data table error");
-    }
+        try{
+            Table* pAntNameTable = fits2save.addTable(antNameHduSign, amp0306Number, antNameColName, antNameColForm, antNameColUnit, AsciiTbl);
+            pAntNameTable->column(antNameColName[0]).write(antNameColumn, 1);
+            pAntNameTable->column(antNameColName[1]).write(antNameIndexColumn, 1);
+        } catch (FITS::CantCreate){
+            ui->logText->append("FITS antenna name table error");
+        }
 
-    try{
-        Table* pAntNameTable = fits2save.addTable(antNameHduSign, amp0306Number, antNameColName, antNameColForm, antNameColUnit, AsciiTbl);
-        pAntNameTable->column(antNameColName[0]).write(antNameColumn, 1);
-        pAntNameTable->column(antNameColName[1]).write(antNameIndexColumn, 1);
-    } catch (FITS::CantCreate){
-        ui->logText->append("FITS antenna name table error");
-    }
+        try{
+            Table* pAntTable = fits2save.addTable(antHduSign, amp0306Number, antColName, antColForm, antColUnit);
+            pAntTable->column(antColName[0]).write(antIndexColumn, 1);
+            pAntTable->column(antColName[1]).write(antXColumn, 1);
+            pAntTable->column(antColName[2]).write(antYColumn, 1);
+            pAntTable->column(antColName[3]).write(antZColumn, 1);
+            pAntTable->column(antColName[4]).write(antFrontEndColumn, 1);
+            pAntTable->column(antColName[5]).write(antFeedColumn, 1);
+            pAntTable->column(antColName[6]).write(antDiameterColumn, 1);
+            pAntTable->column(antColName[7]).write(eastWestZeroVisColumn, 1);
+            fitsNumber++;
+        } catch (FITS::CantCreate){
+            ui->logText->append("FITS antenna table error");
+        }
 
-    try{
-        Table* pAntTable = fits2save.addTable(antHduSign, amp0306Number, antColName, antColForm, antColUnit);
-        pAntTable->column(antColName[0]).write(antIndexColumn, 1);
-        pAntTable->column(antColName[1]).write(antXColumn, 1);
-        pAntTable->column(antColName[2]).write(antYColumn, 1);
-        pAntTable->column(antColName[3]).write(antZColumn, 1);
-        pAntTable->column(antColName[4]).write(antFrontEndColumn, 1);
-        pAntTable->column(antColName[5]).write(antFeedColumn, 1);
-        pAntTable->column(antColName[6]).write(antDiameterColumn, 1);
-        pAntTable->column(antColName[7]).write(eastWestZeroVisColumn, 1);
-        fitsNumber++;
-    } catch (FITS::CantCreate){
-        ui->logText->append("FITS antenna table error");
-    }
-
-    try{
-        Table* pAntPairTable = fits2save.addTable(antPairHduSign, vis0306Number, antPairColName, antPairColForm, antPairColUnit);
-        pAntPairTable->column(antPairColName[0]).write(antAColumn, 1);
-        pAntPairTable->column(antPairColName[1]).write(antBColumn, 1);
-    } catch (FITS::CantCreate){
-        ui->logText->append("FITS antenna pair table error");
+        try{
+            Table* pAntPairTable = fits2save.addTable(antPairHduSign, vis0306Number, antPairColName, antPairColForm, antPairColUnit);
+            pAntPairTable->column(antPairColName[0]).write(antAColumn, 1);
+            pAntPairTable->column(antPairColName[1]).write(antBColumn, 1);
+        } catch (FITS::CantCreate){
+            ui->logText->append("FITS antenna pair table error");
+        }
+    } catch (FITS::CantOpen){
+        ui->logText->append("FITS open error " + qFitsName);
     }
 }
 
@@ -1656,7 +1707,7 @@ void MainWindow::on_oneBitCorrelationButton_clicked(bool checked){
     static tPkg setRgPacket;
     setTypicalPacketPrefix(&setRgPacket, eRqst_Rdr_SetRgs32);
     setRgPacket.D.Rg32.Rg[0] = 0x0F; //
-    setRgPacket.D.Rg32.Rg[1] = 0xFF; //
+    setRgPacket.D.Rg32.Rg[1] = 0x1FF; //
     setRgPacket.D.Rg32.Rg[2] = 0x08; //
     setRgPacket.D.Rg32.Rg[3] = 0x0A8;
     if (oneBitCorrelation)

@@ -4,7 +4,7 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    a.setApplicationName("srh36ControlTest");
+    a.setApplicationName("srh36DataAcquire");
     a.setOrganizationName("ISTP");
     QSettings::setDefaultFormat(QSettings::IniFormat);
 

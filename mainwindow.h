@@ -207,10 +207,12 @@ private:
     std::vector<float> freqColumn;
     std::vector<int> eastWestZeroVisColumn;
     std::vector<std::valarray<double> > timeColumn;
-    std::vector<std::valarray<int64_t > > lcpAmpColumn;
-    std::vector<std::valarray<int64_t > > rcpAmpColumn;
+    std::vector<std::valarray< int64_t > > lcpAmpColumn;
+    std::vector<std::valarray< int64_t > > rcpAmpColumn;
     std::vector<std::valarray< complex<float> > > lcpVisColumn;
     std::vector<std::valarray< complex<float> > > rcpVisColumn;
+    std::vector<std::valarray< float > > lcpAmpCColumn;
+    std::vector<std::valarray< float > > rcpAmpCColumn;
     QString fitsPath;
     void addKey2FitsHeader(QString key, QString value, QString comment, FITS* pFits);
     void addKey2FitsHeader(QString key, int value, FITS* pFits);
@@ -240,6 +242,7 @@ private:
     unsigned int* pAmpIndToCorrPacketInd;
     unsigned int* pAmpIndToFitsInd;
     unsigned int* pReceiverChannelToInd;
+    unsigned int* pAmpCIndToCorrPacketInd;
     QString* pAmpAntennaName;
     int* pAntennaX;
     int* pAntennaY;
