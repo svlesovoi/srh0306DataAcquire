@@ -15,32 +15,22 @@
 #include <CCfits>
 using namespace CCfits;
 
-struct SCorrVis{
-    int32_t real;
-    int32_t imag;
-};
-
-struct SAntennaPosition{
-    long X;
-    long Y;
-    long Z;
-};
-
-struct SAntennaEquipmentID{
-    long antennaName;
-    long frontEndID;
-    long feedID;
-};
-
 namespace Ui {
 class MainWindow;
 }
+
+enum SyncDriverCmd {
+    start,
+    stop,
+    getConfig,
+    setConfig
+};
 
 class MainWindow : public QMainWindow{
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = NULL);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
@@ -167,9 +157,6 @@ private:
     unsigned long showAntennaB;
     unsigned long frequencyListSize;
     unsigned int* frequencyList;
-//    unsigned int antennaNumber;
-//    struct SAntennaPosition* antennaPositions;
-//    struct SAntennaEquipmentID* antennaEquipmentIDs;
     unsigned int dataDelay;
     unsigned int dataDuration;
     unsigned int maxVisValue;
@@ -189,6 +176,9 @@ private:
     float plotterXOffset;
     float plotterYScale;
     float plotterYOffset;
+    int plotterYScaleScroll;
+    int plotterYOffsetScroll;
+    SyncDriverCmd syncDriverCmd;
 
     std::vector<string> antNameColumn;
     std::vector<string> antNameIndexColumn;
@@ -326,6 +316,9 @@ private:
 
     tSyncDriverConfigure SyncDriverConfig;
     QG7M* localOscillator;
+    int fpgaTemperature;
+    int fpgaTemperatureMaximum;
+    bool showReceiverAmplitude;
 };
 
 #endif // MAINWINDOW_H

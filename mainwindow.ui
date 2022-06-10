@@ -398,7 +398,7 @@
    <widget class="QPushButton" name="localOscillatorStartStop">
     <property name="geometry">
      <rect>
-      <x>500</x>
+      <x>350</x>
       <y>10</y>
       <width>201</width>
       <height>36</height>
@@ -409,6 +409,19 @@
     </property>
     <property name="checkable">
      <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="fpgaTemperatureLabel">
+    <property name="geometry">
+     <rect>
+      <x>580</x>
+      <y>10</y>
+      <width>201</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>FPGA temperature</string>
     </property>
    </widget>
   </widget>

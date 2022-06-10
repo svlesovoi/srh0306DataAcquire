@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <math.h>
+#include <qmessagebox.h>
 
 //The main window of a srh36
 MainWindow::MainWindow(QWidget *parent) :
@@ -51,6 +52,9 @@ MainWindow::MainWindow(QWidget *parent) :
     autoStop = settings.value("receiver/autoStop", 0).toBool();
     autoStopHour = settings.value("receiver/autoStopHour", 10).toInt();
     autoStopMinute = settings.value("receiver/autoStopMinute", 10).toInt();
+
+    plotterYScaleScroll = settings.value("ui/plotterYScale", 1).toFloat();
+    plotterYOffsetScroll = settings.value("ui/plotterYOffset", 0).toFloat();
 
     frequencyListSize = settings.value("FITS/frequencyListSize", 32).toUInt();
     frequencyList = new unsigned int[frequencyListSize];
@@ -209,6 +213,7 @@ MainWindow::MainWindow(QWidget *parent) :
     westVisNumber = westAntennaNumber * (westAntennaNumber - 1)/2;
     eastWestVisNumber = (eastAntennaNumber + westAntennaNumber + 1) * (eastAntennaNumber + westAntennaNumber)/2;
     vis0306Number = northEastWestVisNumber + northVisNumber + eastWestVisNumber;
+    amp0306Number = northAntennaNumber + westAntennaNumber + 1 + eastAntennaNumber;
 
     pVisIndToCorrPacketInd = new unsigned int[vis0306Number];
     pVisIndToFitsInd = new unsigned int[vis0306Number];
@@ -266,12 +271,13 @@ MainWindow::MainWindow(QWidget *parent) :
         pAmpCIndToCorrPacketInd[i + northAntennaNumber] = visibilityIndexAsHV(H, H);
     }
 
-    pAmpCIndToCorrPacketInd[i + northAntennaNumber + westAntennaNumber] = visibilityIndexAsHV(centerAntennaReceiver*16 + centerAntennaChannel, centerAntennaReceiver*16 + centerAntennaChannel);
+    pAmpCIndToCorrPacketInd[northAntennaNumber + westAntennaNumber] = visibilityIndexAsHV(centerAntennaReceiver*16 + centerAntennaChannel, centerAntennaReceiver*16 + centerAntennaChannel);
 
     for (unsigned int i = 0;i < eastAntennaNumber;++i){
         unsigned int H = pEastAntennaReceiver[i]*16 + pEastAntennaChannel[i];
         pAmpCIndToCorrPacketInd[i + northAntennaNumber + westAntennaNumber + 1] = visibilityIndexAsHV(H, H);
     }
+
 //northNorth vis
     for (unsigned int i = 1, visInd = northEastWestVisNumber;i < northAntennaNumber;++i){
         for (unsigned int j = 0;j < northAntennaNumber - i;++j){
@@ -280,8 +286,6 @@ MainWindow::MainWindow(QWidget *parent) :
             pVisIndToFitsInd[visInd] = visInd;
             pVisIndToCorrPacketInd[visInd] = visibilityIndexAsHV(H, V);
             pVisibilitySign[visInd] = H > V ? 1 : -1;
-//            pVis0306AntennaNameA[visInd] = pNorthAntennaName[j];
-//            pVis0306AntennaNameB[visInd++] = pNorthAntennaName[j+i];
             pVis0306AntennaNameB[visInd] = pNorthAntennaName[j];
             pVis0306AntennaNameA[visInd++] = pNorthAntennaName[j+i];
         }
@@ -316,7 +320,6 @@ MainWindow::MainWindow(QWidget *parent) :
     }
 
 //--------------------------------------------------ampIndexCalculation---------------------------------------------------------------
-    amp0306Number = northAntennaNumber + westAntennaNumber + 1 + eastAntennaNumber;
     pAmpIndToCorrPacketInd = new unsigned int[amp0306Number];
     pAmpIndToFitsInd = new unsigned int[amp0306Number];
     pReceiverChannelToInd = new unsigned int[amp0306Number];
@@ -517,7 +520,6 @@ MainWindow::MainWindow(QWidget *parent) :
                     << pVisIndToCorrPacketInd[i] << "\n";
 
         fileLogIndexes.close();
-
 //--------------------------------------------------UI---------------------------------------------------------------
     for(int vis = 0;vis < numberOfShowVisibilities;++vis)
         ui->plotter->addGraph();
@@ -527,10 +529,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->yScaleScroll->setRange(1,100);
     ui->yOffsetScroll->setRange(-50,50);
-    ui->yScaleScroll->setValue(100);
-    ui->yOffsetScroll->setValue(0);
-    plotterYScale = 1.;
-    plotterYOffset = 0.;
+    ui->yScaleScroll->setValue(plotterYScaleScroll);
+    ui->yOffsetScroll->setValue(plotterYOffsetScroll);
+
     ui->plotter->yAxis->setRange(-plotterYScale + plotterYOffset, plotterYScale + plotterYOffset);
 
     ui->xScaleScroll->setRange(1,10000);
@@ -554,7 +555,6 @@ MainWindow::MainWindow(QWidget *parent) :
     initAntennaArrayLayoutPlotter();
 
     ui->antennaPlotter->xAxis->setRange(0, numberOfFitsAmplitudes);
-//    ui->antennaPlotter->xAxis->setRange(0, 208);
     QSharedPointer<QCPAxisTickerFixed> antennaTicker(new QCPAxisTickerFixed);
     antennaTicker->setTickStep(16);
     ui->antennaPlotter->xAxis->setTicker(antennaTicker);
@@ -577,6 +577,9 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->antennaPlotter->graph(2)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, 4));
     ui->antennaPlotter->graph(2)->setName("antenna B marker");
 
+    on_yScaleScroll_valueChanged(plotterYScaleScroll);
+    on_yOffsetScroll_valueChanged(plotterYOffsetScroll);
+
     ui->antennaDelaySpin->setRange(-200000,200000);
     ui->antennaDelaySpin->setValue(dataDelay);
     ui->antennaGainSpin->setRange(0,20);
@@ -591,7 +594,15 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->showNWEEButton->setChecked(showNWEE);
     ui->delayTrackingButton->setChecked(delayTracking);
     ui->fringeStoppingButton->setChecked(fringeStopping);
+
     ui->SyncDriverSetConfigButton->hide();
+    ui->localOscillatorStartStop->hide();
+    ui->showNWEEButton->hide();
+    ui->internalSyncButton->hide();
+    ui->oneBitCorrelationButton->hide();
+    ui->zeroButton->hide();
+
+    showReceiverAmplitude = false;
 
     if (autoStart){
         ui->logText->append("Connecting to the correlator... ");
@@ -607,13 +618,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow(){
     QSettings settings;
-    settings.setValue("network/correlatorIP", correlatorIP);
-    settings.setValue("network/correlatorPort", correlatorPort);
-    settings.setValue("FITS/fullPacketsInFits", static_cast<int>(fullPacketsInFits));
-    settings.setValue("FITS/frequencyListSize", static_cast<int>(frequencyListSize));
-    settings.setValue("receiver/internalSync", internalSync);
-    settings.setValue("receiver/internalSync", internalSync);
-    settings.setValue("array/NWEE", showNWEE);
+    settings.setValue("ui/plotterYScale", ui->yScaleScroll->value());
+    settings.setValue("ui/plotterYOffset", ui->yOffsetScroll->value());
     delete ui;
 }
 
@@ -638,6 +644,7 @@ void MainWindow::on_correlatorClient_connected(){
         ui->initCorrelatorButton->setChecked(true);
         initCorrelator(true);
 
+        syncDriverCmd = SyncDriverCmd::start;
         pSyncDriverClient->connectToHost(SyncDriverIP, static_cast<unsigned short>(SyncDriverPort));
     }
 }
@@ -648,38 +655,16 @@ void MainWindow::on_correlatorClient_disconnected(){
 
 void MainWindow::on_SyncDriverConnect_clicked(bool checked){
     if (checked)
-        pSyncDriverClient->connectToHost(SyncDriverIP, SyncDriverPort);
-    else{
-        syncDriverStartStop(false);
-        QTimer::singleShot(3000,this,&MainWindow::disconnectSyncDriver);
-    }
+        syncDriverCmd = SyncDriverCmd::start;
+    else
+        syncDriverCmd = SyncDriverCmd::stop;
+    pSyncDriverClient->connectToHost(SyncDriverIP, static_cast<unsigned short>(SyncDriverPort));
 }
 
 void MainWindow::on_SyncDriverGetConfigButton_clicked(){
-    static tSyncDriverPkg SyncDriverPacket;
-    SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_GetCnfgNew;
-    SyncDriverPacket.H.isPacked = 0;
-    SyncDriverPacket.H.HeadExtTp = 0x00;
-    SyncDriverPacket.H.Magic = 0x05;
-    SyncDriverPacket.H.DtSz = 0;
-    pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
+    syncDriverCmd = SyncDriverCmd::getConfig;
+    pSyncDriverClient->connectToHost(SyncDriverIP, static_cast<unsigned short>(SyncDriverPort));
 }
-
-/*
-void MainWindow::startSyncDriver(){
-    ui->SyncDriverConnect->setChecked(true);
-    ui->SyncDriverSetConfigButton->setChecked(true);
-    syncDriverStartStop(true);
-}
-
-void MainWindow::stopSyncDriver(){
-    ui->localOscillatorStartStop->setChecked(false);
-    on_localOscillatorStartStop_clicked(false);
-    ui->SyncDriverConnect->setChecked(false);
-    ui->SyncDriverSetConfigButton->setChecked(false);
-    syncDriverStartStop(false);
-}
-*/
 
 void MainWindow::startSyncDriver(){
     ui->SyncDriverConnect->setChecked(true);
@@ -692,25 +677,41 @@ void MainWindow::stopSyncDriver(){
     ui->SyncDriverSetConfigButton->setChecked(false);
     syncDriverStartStop(false);
 }
-
-/*
-void MainWindow::on_SyncDriverClient_connected(){
-    ui->logText->append(QString("SyncDriver connected"));
-    if (autoStart)
-        QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
-}
-*/
 
 void MainWindow::disconnectSyncDriver(){
     pSyncDriverClient->disconnectFromHost();
 }
-
+/*
 void MainWindow::on_SyncDriverClient_connected(){
     ui->logText->append(QString("SyncDriver connected"));
     if (autoStart)
         QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
     else
         QTimer::singleShot(1000,this,&MainWindow::stopSyncDriver);
+}
+*/
+void MainWindow::on_SyncDriverClient_connected(){
+    ui->logText->append(QString("SyncDriver connected"));
+    switch (syncDriverCmd){
+        case SyncDriverCmd::start:
+            QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
+        break;
+        case SyncDriverCmd::stop:
+            QTimer::singleShot(3000,this,&MainWindow::stopSyncDriver);
+        break;
+        case SyncDriverCmd::setConfig:
+        break;
+        case SyncDriverCmd::getConfig:
+            static tSyncDriverPkg SyncDriverPacket;
+            SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_GetCnfgNew;
+            SyncDriverPacket.H.isPacked = 0;
+            SyncDriverPacket.H.HeadExtTp = 0x00;
+            SyncDriverPacket.H.Magic = 0x05;
+            SyncDriverPacket.H.DtSz = 0;
+            pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
+            QTimer::singleShot(3000,this,&MainWindow::disconnectSyncDriver);
+        break;
+    }
 }
 
 void MainWindow::on_SyncDriverClient_disconnected(){
@@ -720,36 +721,6 @@ void MainWindow::on_SyncDriverClient_disconnected(){
 void MainWindow::on_SyncDriverSetConfigButton_clicked(bool checked){
     syncDriverStartStop(checked);
 }
-/*
-void MainWindow::syncDriverStartStop(bool start){
-    static tSyncDriverPkg SyncDriverPacket;
-    SyncDriverPacket.H.Rqst = eSyncDriverRqst_Rdr_SetCnfg;
-    SyncDriverPacket.H.isPacked = 0;
-    SyncDriverPacket.H.HeadExtTp = 0x00;
-    SyncDriverPacket.H.Magic = 0x05;
-    SyncDriverPacket.H.DtSz = sizeof(SyncDriverConfig);
-    std::memset(SyncDriverPacket.D.pU8,0,dHlgrphSS_PkgDtMaxSz);
-    SyncDriverPacket.D.Cfg.FSetDuration = SyncDriverConfig.FSetDuration;
-    SyncDriverPacket.D.Cfg.PolarToggle = SyncDriverConfig.PolarToggle;
-    SyncDriverPacket.D.Cfg.PolarSet = SyncDriverConfig.PolarSet;
-    SyncDriverPacket.D.Cfg.HiTimeDuration = SyncDriverConfig.HiTimeDuration;
-    SyncDriverPacket.D.Cfg.LowTimeDuration = SyncDriverConfig.LowTimeDuration;
-    SyncDriverPacket.D.Cfg.NBand = SyncDriverConfig.NBand;
-    SyncDriverPacket.D.Cfg.NCycle = SyncDriverConfig.NCycle;
-    SyncDriverPacket.D.Cfg.NFSet = SyncDriverConfig.NFSet;
-    if (start)
-        SyncDriverPacket.D.Cfg.Cntrl = 0x11;
-    else
-        SyncDriverPacket.D.Cfg.Cntrl = 0x00;
-    pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
-    if (start == false and autoStop){
-        pSyncDriverClient->disconnectFromHost();
-        initCorrelator(false);
-        pCorrelatorClient->disconnectFromHost();
-         QApplication::quit();
-    }
-}
-*/
 
 void MainWindow::syncDriverStartStop(bool start){
     static tSyncDriverPkg SyncDriverPacket;
@@ -789,201 +760,6 @@ void MainWindow::syncDriverStartStop(bool start){
     pSyncDriverClient->write(reinterpret_cast<const char*>(&SyncDriverPacket), sizeof(tSyncDriverPkg_Head) + SyncDriverPacket.H.DtSz);
     QTimer::singleShot(3000,this,&MainWindow::disconnectSyncDriver);
 }
-
-/*
-void MainWindow::on_correlatorClient_parse(){
-    unsigned int lcpAmpColumnOffset;
-    unsigned int rcpAmpColumnOffset;
-    unsigned int lcpVisColumnOffset;
-    unsigned int rcpVisColumnOffset;
-    tPkg_Head* pCorrHead =  reinterpret_cast<tPkg_Head*>(correlatorRawBuffer);
-    tPkg_Dt* pCorrData = reinterpret_cast<tPkg_Dt*>(correlatorRawBuffer + sizeof(tPkg_Head));
-    if (parsingState == 0){
-        if (static_cast<unsigned long>(pCorrelatorClient->bytesAvailable()) >= sizeof(tPkg_Head)){
-            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrHead), sizeof(tPkg_Head));           //read header
-            switch (pCorrHead->Rqst){
-                case eRqst_GetState:
-                    ui->logText->append("eRqst_GetState");
-                break;
-                case eRqst_SetStateProcessing:
-                    ui->logText->append("eRqst_SetStateProcessing");
-                break;
-                case eRqst_SetStateIdle:
-                    ui->logText->append("eRqst_SetStateIdle");
-                break;
-                case eRqst_SetEmulSin:
-                    ui->logText->append("eRqst_SetEmulSin");
-                break;
-                case eRqst_Rdr_SetCnfg:
-                    ui->logText->append("eRqst_Rdr_SetCnfg");
-                break;
-                case eRqst_Rdr_SetRgs32:
-                    ui->logText->append("eRqst_Rdr_SetRgs32");
-                break;
-                case eRqst_SetTime:
-                    ui->logText->append("eRqst_SetTime");
-                break;
-                case eRqst_GetPropertyFPGA:
-                    parsingState = 1;//there is payload
-                break;
-                case eRqst_GetProperty:
-                    parsingState = 1;//there is payload
-                break;
-                case eRqst_Rdr_Strm_DtOut:
-                    parsingState = 2;//visibility data
-                break;
-            }
-        }
-    } else if (parsingState == 1){
-        if (pCorrelatorClient->bytesAvailable() >= pCorrHead->DtSz){
-            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrData), pCorrHead->DtSz);         //read data
-            parsingState = 0;
-            switch (pCorrHead->Rqst){
-                case eRqst_GetProperty:
-                    ui->logText->append("eRqst_GetProperty");
-                    ui->logText->append(QString(reinterpret_cast<const char*>(pCorrData->pU8)));
-                break;
-                case eRqst_GetPropertyFPGA:
-                    ui->logText->append("eRqst_GetPropertyFPGA");
-                    ui->logText->append(QString(reinterpret_cast<const char*>(pCorrData->pU8)));
-                break;
-            }
-        }
-    } else if (parsingState == 2){//read visibility data
-        if (pCorrelatorClient->bytesAvailable() >= pCorrHead->DtSz){
-            pCorrelatorClient->read(reinterpret_cast<char*>(pCorrData), pCorrHead->DtSz);         //read data
-            if (pCorrHead->isPacked == 0){ // meta data
-                currentPolarization = pCorrData->Cfg.InfoSpiDrv.StsSpi.Plrztn;
-                currentFrequency = 0;
-                for (unsigned int f = 0;f < frequencyListSize;++f)
-                    if (pCorrData->Cfg.InfoSpiDrv.Frequency == frequencyList[f])
-                            currentFrequency = f;
-                if (currentPolarization == 0 && currentFrequency == 0)
-                    metaDataReceived = true;
-            } else if(metaDataReceived && pCorrData->Blck.DtBlck.DtSz > 0 && pCorrData->Blck.DtBlck.DtSz <= dHlgrph_PkgBlckDtMaxSz) { //visibility data
-                std::memcpy(dataPacket + pCorrData->Blck.DtBlck.Offset, pCorrData->Blck.pU8, pCorrData->Blck.DtBlck.DtSz);
-                if (pCorrData->Blck.DtBlck.Offset + pCorrData->Blck.DtBlck.DtSz == pCorrData->Blck.DtBlck.FullDtSz){
-                    ++packetNumber;
-                    if (packetNumber > plotterXScale)
-                        ui->plotter->xAxis->setRange(packetNumber - plotterXScale + plotterXOffset, packetNumber + plotterXOffset);
-
-                    int32_t* pAmpl = reinterpret_cast<int32_t*>(dataPacket) + 44096;
-                    int64_t* pAnt0 = reinterpret_cast<int64_t*>(pAmpl);
-                    if (currentPolarization == showPolarization && currentFrequency == showFrequency){
-                        ui->currentFrequencySpinBox->setPrefix(QString::number(frequencyList[currentFrequency]) + " ");
-                        if (showNWEE){
-                            ui->plotter->graph(0)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaA]] * ampScale);
-                            ui->plotter->graph(1)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaB]] * ampScale);
-                        } else {
-                            ui->plotter->graph(0)->addData(packetNumber, pAnt0[showAntennaA] * ampScale);
-                            ui->plotter->graph(1)->addData(packetNumber, pAnt0[showAntennaB] * ampScale);
-                        }
-                        unsigned int visibilityIndex = visibilityIndexAsHV(pAntennaReceiver[showAntennaA]*16 + pAntennaReceiverChannel[showAntennaA],
-                                                                           pAntennaReceiver[showAntennaB]*16 + pAntennaReceiverChannel[showAntennaB]);
-                        if (visibilityIndex >= 0 && visibilityIndex < numberOfVisibilities){
-                            ui->plotter->graph(2)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket) + visibilityIndex*2)*visScale);
-                            ui->plotter->graph(3)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket) + visibilityIndex*2 + 1)*visScale);
-//                            int32_t re = *(reinterpret_cast<int32_t*>(dataPacket) + visibilityIndex*2    );
-//                            int32_t im = *(reinterpret_cast<int32_t*>(dataPacket) + visibilityIndex*2 + 1);
-//                            ui->plotter->graph(3)->addData(packetNumber, sqrt(pow(re,2) + pow(im,2))*visScale);
-                        }
-                        if (showNWEE){
-                            QVector<double> antennaX(numberOfFitsAmplitudes);
-                            QVector<double> antennaY(numberOfFitsAmplitudes);
-                            QVector<double> antennaAXmarker(1);
-                            QVector<double> antennaAYmarker(1);
-                            QVector<double> antennaBXmarker(1);
-                            QVector<double> antennaBYmarker(1);
-                            for(unsigned int ant = 0;ant < numberOfFitsAmplitudes;++ant){
-                              antennaX[ant] = ant;
-                              antennaY[ant] = static_cast<double>(pAnt0[pAmpIndToCorrPacketInd[ant]] * ampScale);
-                              if (ant == showAntennaA){
-                                  antennaAXmarker[0] = antennaX[ant];
-                                  antennaAYmarker[0] = antennaY[ant];
-                              }
-                              if (ant == showAntennaB){
-                                  antennaBXmarker[0] = antennaX[ant];
-                                  antennaBYmarker[0] = antennaY[ant];
-                              }
-                            }
-                            ui->antennaPlotter->graph(0)->setData(antennaX, antennaY, numberOfFitsAmplitudes);
-                            ui->antennaPlotter->graph(1)->setData(antennaAXmarker, antennaAYmarker, 1);
-                            ui->antennaPlotter->graph(2)->setData(antennaBXmarker, antennaBYmarker, 1);
-                            replotAntennaMarkers();
-                        } else {
-                            QVector<double> antennaX(208);
-                            QVector<double> antennaY(208);
-                            QVector<double> antennaAXmarker(1);
-                            QVector<double> antennaAYmarker(1);
-                            QVector<double> antennaBXmarker(1);
-                            QVector<double> antennaBYmarker(1);
-                            for(unsigned int ant = 0;ant < 208;++ant){
-                                antennaX[ant] = ant;
-                                antennaY[ant] = static_cast<double>(pAnt0[ant] * ampScale);
-                                if (ant == showAntennaA){
-                                    antennaAXmarker[0] = antennaX[ant];
-                                    antennaAYmarker[0] = antennaY[ant];
-                                }
-                                if (ant == showAntennaB){
-                                    antennaBXmarker[0] = antennaX[ant];
-                                    antennaBYmarker[0] = antennaY[ant];
-                                }
-                            }
-                            ui->antennaPlotter->graph(0)->setData(antennaX, antennaY, 208);
-                            ui->antennaPlotter->graph(1)->setData(antennaAXmarker, antennaAYmarker, 1);
-                            ui->antennaPlotter->graph(2)->setData(antennaBXmarker, antennaBYmarker, 1);
-                        }
-                        ui->antennaPlotter->replot();
-                    } else {
-                    }
-                    ui->plotter->replot();
-                    lcpAmpColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfFitsAmplitudes;
-                    rcpAmpColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfFitsAmplitudes;
-                    lcpVisColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfFitsVisibilities;
-                    rcpVisColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfFitsVisibilities;
-
-                    QTime curTime = QTime::currentTime();
-                    int64_t* pAmplitude = pAnt0;
-                    int64_t* pVisibility = reinterpret_cast<int64_t*>(dataPacket);
-                    if (currentPolarization == 0 && lcpFullPacketNumber < fullPacketsInFits){
-                        freqColumn[currentFrequency] = frequencyList[currentFrequency];
-                        timeColumn[currentFrequency][lcpFullPacketNumber / frequencyListSize] = curTime.msecsSinceStartOfDay() * 0.001;
-                        for(unsigned int lcpAmp = 0;lcpAmp < numberOfFitsAmplitudes;++lcpAmp)
-                            lcpAmpColumn[currentFrequency][lcpAmpColumnOffset + pAmpIndToFitsInd[lcpAmp]] = pAmplitude[pAmpIndToCorrPacketInd[lcpAmp]];
-                        for(unsigned int lcpVis = 0;lcpVis < numberOfFitsVisibilities;++lcpVis){
-//                            lcpVisColumn[currentFrequency][lcpVisColumnOffset + pVisIndToFitsInd[lcpVis]] = pVisibility[pVisIndToCorrPacketInd[lcpVis]];
-                            int64_t lcpInt64 = pVisibility[pVisIndToCorrPacketInd[lcpVis]];
-                            float realLcpInt64 = *(int32_t*)&lcpInt64;
-                            float imagLcpInt64 = *((int32_t*)&lcpInt64 + 1);
-                            lcpVisColumn[currentFrequency][lcpVisColumnOffset + pVisIndToFitsInd[lcpVis]] = complex<float>(realLcpInt64,  imagLcpInt64);
-                        }
-                        ++lcpFullPacketNumber;
-                    } else if (rcpFullPacketNumber < fullPacketsInFits){
-                        for(unsigned int rcpAmp = 0;rcpAmp < numberOfFitsAmplitudes;++rcpAmp)
-                            rcpAmpColumn[currentFrequency][rcpAmpColumnOffset + pAmpIndToFitsInd[rcpAmp]] = pAmplitude[pAmpIndToCorrPacketInd[rcpAmp]];
-                        for(unsigned int rcpVis = 0;rcpVis < numberOfFitsVisibilities;++rcpVis){
-//                            rcpVisColumn[currentFrequency][rcpVisColumnOffset + pVisIndToFitsInd[rcpVis]] = pVisibility[pVisIndToCorrPacketInd[rcpVis]];
-                            int64_t rcpInt64 = pVisibility[pVisIndToCorrPacketInd[rcpVis]];
-                            float realRcpInt64 = *(int32_t*)&rcpInt64;
-                            float imagRcpInt64 = *((int32_t*)&rcpInt64 + 1);
-                            rcpVisColumn[currentFrequency][rcpVisColumnOffset + pVisIndToFitsInd[rcpVis]] = complex<float>(realRcpInt64, imagRcpInt64);
-                        }
-                        ++rcpFullPacketNumber;
-                    }
-                    if (lcpFullPacketNumber == fullPacketsInFits && rcpFullPacketNumber == fullPacketsInFits){
-                        writeCurrentFits();
-                        ++fitsNumber;
-                        currentFrequency = 0;
-                        lcpFullPacketNumber = 0;
-                        rcpFullPacketNumber = 0;
-                    }
-                }//full packet read
-            }//visibility data
-            parsingState = 0;
-        }
-    }
-}
-*/
 
 void MainWindow::on_correlatorClient_parse(){
     unsigned int lcpAmpColumnOffset;
@@ -1067,8 +843,8 @@ void MainWindow::on_correlatorClient_parse(){
                     std::memcpy(dataPacket + pCorrData->Blck.DtBlck.Offset, pCorrData->Blck.pU8, pCorrData->Blck.DtBlck.DtSz);
                     currentPolarization = pCorrData->Blck.Cfg.InfoSpiDrv.StsSpi.Plrztn;
                     if (currentPolarization == showPolarization && currentFrequency == showFrequency){
-                        ui->logText->append("Tbox " + QString::number(pCorrData->Blck.Cfg.Temprtr));
-                        ui->logText->append("Tfpga " + QString::number(pCorrData->Blck.Cfg.InfoSpiDrv.StsSpi.Tfpga));
+                        fpgaTemperature = pCorrData->Blck.Cfg.InfoSpiDrv.StsSpi.Tfpga;
+                        ui->fpgaTemperatureLabel->setText("FPGA temperature " + QString::number(fpgaTemperature));
                     }
                     currentFrequency = 0;
                     currentTime = pCorrData->Blck.Cfg.TimeDMA;
@@ -1086,42 +862,7 @@ void MainWindow::on_correlatorClient_parse(){
 
                     int32_t* pAmpl = reinterpret_cast<int32_t*>(dataPacket + sizeof(tConfigure)) + 44096;
                     int64_t* pAnt0 = reinterpret_cast<int64_t*>(pAmpl);
-                    if (currentPolarization == showPolarization && currentFrequency == showFrequency){
-                        ui->currentFrequencySpinBox->setPrefix(QString::number(frequencyList[currentFrequency]) + " ");
-                        ui->plotter->graph(0)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaA]] * ampScale);
-                        ui->plotter->graph(1)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaB]] * ampScale);
-                        unsigned int visibilityIndex = visibilityIndexAsHV(pAntennaReceiver[showAntennaA]*16 + pAntennaReceiverChannel[showAntennaA],
-                                                                           pAntennaReceiver[showAntennaB]*16 + pAntennaReceiverChannel[showAntennaB]);
-                        if (visibilityIndex < numberOfVisibilities){
-                            ui->plotter->graph(2)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket  + sizeof(tConfigure)) + visibilityIndex*2)*visScale);
-                            ui->plotter->graph(3)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket  + sizeof(tConfigure)) + visibilityIndex*2 + 1)*visScale);
-                        }
-                        QVector<double> antennaX(numberOfFitsAmplitudes);
-                        QVector<double> antennaY(numberOfFitsAmplitudes);
-                        QVector<double> antennaAXmarker(1);
-                        QVector<double> antennaAYmarker(1);
-                        QVector<double> antennaBXmarker(1);
-                        QVector<double> antennaBYmarker(1);
-                        for(unsigned int ant = 0;ant < numberOfFitsAmplitudes;++ant){
-                          antennaX[ant] = ant;
-                          antennaY[ant] = static_cast<double>(pAnt0[pAmpIndToCorrPacketInd[ant]] * ampScale);
-                          if (ant == showAntennaA){
-                              antennaAXmarker[0] = antennaX[ant];
-                              antennaAYmarker[0] = antennaY[ant];
-                          }
-                          if (ant == showAntennaB){
-                              antennaBXmarker[0] = antennaX[ant];
-                              antennaBYmarker[0] = antennaY[ant];
-                          }
-                        }
-                        ui->antennaPlotter->graph(0)->setData(antennaX, antennaY, numberOfFitsAmplitudes);
-                        ui->antennaPlotter->graph(1)->setData(antennaAXmarker, antennaAYmarker, 1);
-                        ui->antennaPlotter->graph(2)->setData(antennaBXmarker, antennaBYmarker, 1);
-                        replotAntennaMarkers();
-                        ui->antennaPlotter->replot();
-                    } else {
-                    }
-                    ui->plotter->replot();
+
                     lcpAmpColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfFitsAmplitudes;
                     rcpAmpColumnOffset = rcpFullPacketNumber / frequencyListSize * numberOfFitsAmplitudes;
                     lcpVisColumnOffset = lcpFullPacketNumber / frequencyListSize * numberOfFitsVisibilities;
@@ -1161,6 +902,51 @@ void MainWindow::on_correlatorClient_parse(){
                         }
                         ++rcpFullPacketNumber;
                     }
+
+                    if (currentPolarization == showPolarization && currentFrequency == showFrequency){
+                        ui->currentFrequencySpinBox->setPrefix(QString::number(frequencyList[currentFrequency]) + " ");
+                        ui->plotter->graph(0)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaA]] * ampScale);
+                        ui->plotter->graph(1)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaB]] * ampScale);
+                        unsigned int visibilityIndex = visibilityIndexAsHV(pAntennaReceiver[showAntennaA]*16 + pAntennaReceiverChannel[showAntennaA],
+                                                                           pAntennaReceiver[showAntennaB]*16 + pAntennaReceiverChannel[showAntennaB]);
+                        if (visibilityIndex < numberOfVisibilities){
+                            ui->plotter->graph(2)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket  + sizeof(tConfigure)) + visibilityIndex*2)*visScale);
+                            ui->plotter->graph(3)->addData(packetNumber, *(reinterpret_cast<int32_t*>(dataPacket  + sizeof(tConfigure)) + visibilityIndex*2 + 1)*visScale);
+                        }
+                        QVector<double> antennaX(numberOfFitsAmplitudes);
+                        QVector<double> antennaY(numberOfFitsAmplitudes);
+                        QVector<double> antennaAXmarker(1);
+                        QVector<double> antennaAYmarker(1);
+                        QVector<double> antennaBXmarker(1);
+                        QVector<double> antennaBYmarker(1);
+                        for(unsigned int ant = 0;ant < numberOfFitsAmplitudes;++ant){
+                          antennaX[ant] = ant;
+                          if (showReceiverAmplitude)
+                              antennaY[ant] = static_cast<double>(pAnt0[pAmpIndToCorrPacketInd[ant]] * ampScale);
+                          else
+                              if (showPolarization == 0)
+                                  antennaY[ant] = static_cast<double>(lcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + ant] * visScale);
+                              else
+                                  antennaY[ant] = static_cast<double>(rcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + ant] * visScale);
+
+                          if (ant == showAntennaA){
+                              antennaAXmarker[0] = antennaX[ant];
+                              antennaAYmarker[0] = antennaY[ant];
+                          }
+                          if (ant == showAntennaB){
+                              antennaBXmarker[0] = antennaX[ant];
+                              antennaBYmarker[0] = antennaY[ant];
+                          }
+                        }
+                        ui->antennaPlotter->graph(0)->setData(antennaX, antennaY, numberOfFitsAmplitudes);
+                        ui->antennaPlotter->graph(1)->setData(antennaAXmarker, antennaAYmarker, 1);
+                        ui->antennaPlotter->graph(2)->setData(antennaBXmarker, antennaBYmarker, 1);
+                        replotAntennaMarkers();
+                        ui->antennaPlotter->replot();
+                    } else {
+                    }
+                    ui->plotter->replot();
+
                     if (lcpFullPacketNumber == fullPacketsInFits && rcpFullPacketNumber == fullPacketsInFits){
                         writeCurrentFits();
                         ++fitsNumber;
