@@ -59,10 +59,6 @@ private slots:
 
     void on_antennaDelaySpin_valueChanged(int arg1);
 
-    void on_setTimeButton_clicked();
-
-    void on_internalSyncButton_clicked(bool checked);
-
     void on_initCorrelatorButton_clicked(bool checked);
 
     void on_correlatorClient_parse();
@@ -111,17 +107,13 @@ private slots:
 
     void on_calcAllDelaysButton_clicked();
 
-    void on_showNWEEButton_toggled(bool checked);
-
     void on_delayTrackingButton_clicked(bool checked);
 
     void on_showPolarizationButton_toggled(bool checked);
 
-    void on_SyncDriverGetConfigButton_clicked();
-
     void on_SyncDriverSetConfigButton_clicked(bool checked);
 
-    void on_localOscillatorStartStop_clicked(bool checked);
+    void on_receiver_correlator_amps_button_toggled(bool checked);
 
 private:
     Ui::MainWindow *ui;
@@ -161,7 +153,6 @@ private:
     unsigned int dataDuration;
     unsigned int maxVisValue;
     unsigned int frequencyDelay;
-    bool internalSync;
     unsigned int quantizerStep;
     bool quantizerType;
     bool oneBitCorrelation;
@@ -214,7 +205,6 @@ private:
 
     unsigned int* pAntennaReceiver;
     unsigned int* pAntennaReceiverChannel;
-    bool showNWEE;
     unsigned int visibilityIndexAsHV(unsigned int, unsigned int);
 
     double visScale;

@@ -39,10 +39,8 @@ MainWindow::MainWindow(QWidget *parent) :
     fitsPath = settings.value("FITS/fitsPath", "/home/sergey/SRH/currentData/").toString();
     fullPacketsInFits = settings.value("FITS/fullPacketsInFits", 256).toUInt();
     frequencyDelay = settings.value("array/frequencyDelay", 64).toUInt();
-    showNWEE = settings.value("array/NWEE", true).toBool();
     dataDelay = settings.value("receiver/dataDelay", 10000).toUInt();
     dataDuration = settings.value("receiver/dataDuration", 2000000).toUInt();
-    internalSync = settings.value("receiver/internalSync", 0).toBool();
     oneBitCorrelation = settings.value("receiver/oneBitCorrelation", 0).toBool();
     quantizerStep = settings.value("receiver/quantizerStep",1000).toUInt();
     quantizerType = settings.value("receiver/quantizerType",0).toBool();
@@ -584,23 +582,13 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->antennaDelaySpin->setValue(dataDelay);
     ui->antennaGainSpin->setRange(0,20);
     ui->antennaGainSpin->setValue(10);
-    ui->quantizerSpinBox->setRange(0, 10000000);
-    ui->internalSyncButton->setChecked(internalSync);
     ui->currentFrequencySpinBox->setRange(0, frequencyListSize - 1);
     ui->currentAntennaASpinBox->setRange(0, amp0306Number - 1);
     ui->currentAntennaBSpinBox->setRange(0, amp0306Number - 1);
     ui->currentAntennaASpinBox->setValue(showAntennaA);
     ui->currentAntennaBSpinBox->setValue(showAntennaB);
-    ui->showNWEEButton->setChecked(showNWEE);
     ui->delayTrackingButton->setChecked(delayTracking);
     ui->fringeStoppingButton->setChecked(fringeStopping);
-
-    ui->SyncDriverSetConfigButton->hide();
-    ui->localOscillatorStartStop->hide();
-    ui->showNWEEButton->hide();
-    ui->internalSyncButton->hide();
-    ui->oneBitCorrelationButton->hide();
-    ui->zeroButton->hide();
 
     showReceiverAmplitude = false;
 
@@ -638,8 +626,6 @@ void MainWindow::on_correlatorClient_connected(){
     setTypicalPacketPrefix(&requestPacket, eRqst_GetProperty);
     pCorrelatorClient->write(reinterpret_cast<const char*>(&requestPacket), sizeof(tPkg_Head));
     if (autoStart){
-        ui->localOscillatorStartStop->setChecked(true);
-        on_localOscillatorStartStop_clicked(true);
         ui->connectButton->setChecked(true);
         ui->initCorrelatorButton->setChecked(true);
         initCorrelator(true);
@@ -661,35 +647,20 @@ void MainWindow::on_SyncDriverConnect_clicked(bool checked){
     pSyncDriverClient->connectToHost(SyncDriverIP, static_cast<unsigned short>(SyncDriverPort));
 }
 
-void MainWindow::on_SyncDriverGetConfigButton_clicked(){
-    syncDriverCmd = SyncDriverCmd::getConfig;
-    pSyncDriverClient->connectToHost(SyncDriverIP, static_cast<unsigned short>(SyncDriverPort));
-}
-
 void MainWindow::startSyncDriver(){
     ui->SyncDriverConnect->setChecked(true);
-    ui->SyncDriverSetConfigButton->setChecked(true);
     syncDriverStartStop(true);
 }
 
 void MainWindow::stopSyncDriver(){
     ui->SyncDriverConnect->setChecked(false);
-    ui->SyncDriverSetConfigButton->setChecked(false);
     syncDriverStartStop(false);
 }
 
 void MainWindow::disconnectSyncDriver(){
     pSyncDriverClient->disconnectFromHost();
 }
-/*
-void MainWindow::on_SyncDriverClient_connected(){
-    ui->logText->append(QString("SyncDriver connected"));
-    if (autoStart)
-        QTimer::singleShot(10000,this,&MainWindow::startSyncDriver);
-    else
-        QTimer::singleShot(1000,this,&MainWindow::stopSyncDriver);
-}
-*/
+
 void MainWindow::on_SyncDriverClient_connected(){
     ui->logText->append(QString("SyncDriver connected"));
     switch (syncDriverCmd){
@@ -905,8 +876,17 @@ void MainWindow::on_correlatorClient_parse(){
 
                     if (currentPolarization == showPolarization && currentFrequency == showFrequency){
                         ui->currentFrequencySpinBox->setPrefix(QString::number(frequencyList[currentFrequency]) + " ");
-                        ui->plotter->graph(0)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaA]] * ampScale);
-                        ui->plotter->graph(1)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaB]] * ampScale);
+                        if (showReceiverAmplitude){
+                            ui->plotter->graph(0)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaA]] * ampScale);
+                            ui->plotter->graph(1)->addData(packetNumber, pAnt0[pAmpIndToCorrPacketInd[showAntennaB]] * ampScale);
+                        } else
+                            if (showPolarization == 0){
+                                ui->plotter->graph(0)->addData(packetNumber, static_cast<double>(lcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + showAntennaA] * visScale));
+                                ui->plotter->graph(1)->addData(packetNumber, static_cast<double>(lcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + showAntennaB] * visScale));
+                            } else {
+                                ui->plotter->graph(0)->addData(packetNumber, static_cast<double>(rcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + showAntennaA] * visScale));
+                                ui->plotter->graph(1)->addData(packetNumber, static_cast<double>(rcpAmpCColumn[currentFrequency][rcpAmpColumnOffset + showAntennaB] * visScale));
+                            }
                         unsigned int visibilityIndex = visibilityIndexAsHV(pAntennaReceiver[showAntennaA]*16 + pAntennaReceiverChannel[showAntennaA],
                                                                            pAntennaReceiver[showAntennaB]*16 + pAntennaReceiverChannel[showAntennaB]);
                         if (visibilityIndex < numberOfVisibilities){
@@ -1313,10 +1293,6 @@ void MainWindow::setTypicalPacketPrefix(tPkg* pPacket, uint8_t request){
     pPacket->H.Rqst = request;
 }
 
-void MainWindow::on_setTimeButton_clicked(){
-    setCorrelatorTime();
-}
-
 void MainWindow::setCorrelatorTime(){
     tPkg setRgPacket;
     QDateTime curTime = QDateTime::currentDateTime();
@@ -1337,10 +1313,6 @@ void MainWindow::setCorrelatorTime(){
 
     msg.sprintf("timestamp ");
     ui->logText->append(msg + QString(curTime.toString("yyyyMMddThhmmss")));
-}
-
-void MainWindow::on_internalSyncButton_clicked(bool checked){
-    internalSync = checked;
 }
 
 void MainWindow::on_initCorrelatorButton_clicked(bool checked){
@@ -1369,44 +1341,9 @@ void MainWindow::initCorrelator(bool acquire){
         setFrequencies();
         syncCorrelator(true);
         startCorrelator(true);
-/*
-
-        setRgPacket.H.Rqst = eRqst_Rdr_SetRgs32;
-        setRgPacket.D.Rg32.Count = frequencyListSize + 4;
-        setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
-        setRgPacket.D.Rg32.Rg[0] = 0x0000004;//start address
-        setRgPacket.D.Rg32.Rg[1] = dataDelay;
-        setRgPacket.D.Rg32.Rg[2] = dataDuration;//80 ms 2000000, 100 ms 2500000
-        setRgPacket.D.Rg32.Rg[3] = 0;
-        for (unsigned int i = 0;i < frequencyListSize;++i)
-            setRgPacket.D.Rg32.Rg[i + 4] = frequencyList[i];
-        pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
-
-        setRgPacket.D.Rg32.Count = 2;
-        setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
-        setRgPacket.D.Rg32.Rg[0] = 1;
-        setRgPacket.D.Rg32.Rg[1] = internalSync ? 0x2 : 0x1; // start sync
-        pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
-
-        setRgPacket.H.Rqst = eRqst_SetStateProcessing;//DMA
-        setRgPacket.H.DtSz = 0;
-        pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head));
-*/
     } else {
         startCorrelator(false);
         syncCorrelator(false);
-/*
-        setRgPacket.H.Rqst = eRqst_SetStateIdle;//DMA stop
-        setRgPacket.H.DtSz = 0;
-        pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head));
-
-        setRgPacket.H.Rqst = eRqst_Rdr_SetRgs32;
-        setRgPacket.D.Rg32.Count = 2;
-        setRgPacket.H.DtSz = (setRgPacket.D.Rg32.Count + 1)*4;
-        setRgPacket.D.Rg32.Rg[0] = 1;
-        setRgPacket.D.Rg32.Rg[1] = 0; // stop sync
-        pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
-*/
     }
 }
 
@@ -1429,7 +1366,7 @@ void MainWindow::syncCorrelator(bool start){
     setTypicalPacketPrefix(&setRgPacket, eRqst_Rdr_SetRgs32);
     setRgPacket.D.Rg32.Rg[0] = 1;
     if (start)
-        setRgPacket.D.Rg32.Rg[1] = internalSync ? 0x2 : 0x1; // start sync
+        setRgPacket.D.Rg32.Rg[1] = 0x1; // start external sync
     else
         setRgPacket.D.Rg32.Rg[1] = 0; // stop sync
     setRgPacket.D.Rg32.Count = 2;
@@ -1675,7 +1612,6 @@ void MainWindow::on_calcAllDelaysButton_clicked(){
         nNorthDelayAsSrhDelta = (int)(constDelta + fNorthDelayAsSrhDelta*(northAnt + 1) + .5);
         setRgPacket.D.Rg32.Rg[1] = 0x001 << 2;//pNorthAntennaReceiver[northAnt]; //receiver select
         setRgPacket.D.Rg32.Rg[3] = 0x100 | (pNorthAntennaChannel[northAnt] << 4); //virtual delay address for antenna in the receiver
-//        ui->logText->append("N " + QString::number(northAnt) + " " + QString::number(pNorthAntennaReceiver[northAnt]) + " " + QString::number(pNorthAntennaChannel[northAnt]));
         setRgPacket.D.Rg32.Rg[4] = nNorthDelayAsSrhDelta / 100; //coarse delay value
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
     }
@@ -1684,7 +1620,6 @@ void MainWindow::on_calcAllDelaysButton_clicked(){
         nWestDelayAsSrhDelta = (int)(constDelta + fWestDelayAsSrhDelta*(westAnt + 1) + .5);
         setRgPacket.D.Rg32.Rg[1] = 0x001 << 0;//pWestAntennaReceiver[westAnt]; //receiver select
         setRgPacket.D.Rg32.Rg[3] = 0x100 | (pWestAntennaChannel[westAnt] << 4); //virtual delay address for antenna in the receiver
-//        ui->logText->append("W " + QString::number(westAnt) + " " + QString::number(pWestAntennaReceiver[westAnt]) + " " + QString::number(pWestAntennaChannel[westAnt]));
         setRgPacket.D.Rg32.Rg[4] = nWestDelayAsSrhDelta / 100; //coarse delay value
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
     }
@@ -1693,30 +1628,10 @@ void MainWindow::on_calcAllDelaysButton_clicked(){
         nEastDelayAsSrhDelta = (int)(constDelta + fEastDelayAsSrhDelta*(eastAnt + 1) + .5);
         setRgPacket.D.Rg32.Rg[1] = 0x001 << 4;//pEastAntennaReceiver[eastAnt]; //receiver select
         setRgPacket.D.Rg32.Rg[3] = 0x100 | (pEastAntennaChannel[eastAnt] << 4); //virtual delay address for antenna in the receiver
-//        ui->logText->append("E " + QString::number(eastAnt) + " " + QString::number(pEastAntennaReceiver[eastAnt]) + " " + QString::number(pEastAntennaChannel[eastAnt]));
         setRgPacket.D.Rg32.Rg[4] = nEastDelayAsSrhDelta / 100; //coarse delay value
         pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
     }
 
-/*
-    for (unsigned int Ant = 0;Ant < amp0306Number;++Ant){
-        setRgPacket.D.Rg32.Rg[1] = 0x001 << pAntennaReceiver[Ant]; //receiver select
-        setRgPacket.D.Rg32.Rg[3] = 0x102 | (pAntennaReceiverChannel[Ant] << 4); //virtual delay address for antenna in the receiver
-        ui->logText->append("NWEE " + QString::number(Ant) + " " + QString::number(pAntennaReceiver[Ant]) + " " + QString::number(pAntennaReceiverChannel[Ant]));
-        setRgPacket.D.Rg32.Rg[4] = 12;
-        pCorrelatorClient->write(reinterpret_cast<const char*>(&setRgPacket), sizeof(tPkg_Head) + setRgPacket.H.DtSz);
-    }
-*/
-}
-
-void MainWindow::on_showNWEEButton_toggled(bool checked){
-    showNWEE = checked;
-/*
-    if (showNWEE)
-        ui->antennaPlotter->xAxis->setRange(0,amp0306Number);
-    else
-        ui->antennaPlotter->xAxis->setRange(0,208);
-    ui->antennaPlotter->replot();*/
 }
 
 void MainWindow::on_showPolarizationButton_toggled(bool checked){
@@ -1727,18 +1642,6 @@ void MainWindow::on_showPolarizationButton_toggled(bool checked){
         ui->showPolarizationButton->setText("RCP");
 }
 
-void MainWindow::on_localOscillatorStartStop_clicked(bool start){
-/*    if (start){
-        QStringList freqList;
-        for (unsigned long i = 0;i < frequencyListSize;++i)
-            freqList.append(QString::number(frequencyList[i]/1000) + " MHz");
-        ui->logText->append(localOscillator->startFrequencyList(freqList));
-        ui->logText->append("LO start");
-        ui->logText->append(localOscillator->getFrequencyList());
-        ui->logText->append(localOscillator->getStatus());
-    } else {
-        ui->logText->append(localOscillator->stopFrequencyList());
-        ui->logText->append("LO stop");
-        ui->logText->append(localOscillator->getStatus());
-    }*/
+void MainWindow::on_receiver_correlator_amps_button_toggled(bool checked){
+    showReceiverAmplitude = checked;
 }
